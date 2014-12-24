@@ -1,0 +1,6 @@
+ 3 surfaces ZERNNULL.OPT  Newtonian telescope w/ Zernike
+  X     Z         Zern1   Zern3    pitch   mir?   Diam
+-----:---.-----:--------:---.-----:------:------:------:--------
+     :  9.9875 :   0    : -0.0125 :      : mir  : 2.0  :
+     :  2.0    : -0.25  :   0     :      : mir  : 0.5  :
+ 2.0 :  2.0    :        :         : 90   :      :      :

@@ -1,0 +1,9 @@
+  5 surfaces   CZERNY.OPT      Crossed CzernyTurner
+   X        Z      Curv    pitch    Type?    Diam   Gx   Order
+----.----:---.---:--------:------:---------:------:-----:-----:
+   0     : 0.1   :        :      : iris    :  2   :     :     :
+   0     : 98.33 : -0.005 :  10  : mirror  : 40   :     :     :
+ -30     : 14    :        :  33  : Grating :      : 0.4 :  1  :
+  38     : 52.5  : -0.005 :  75  : mirror  : 40   :     :     :
+ -58.915 ? 52.5  :        :  90  : CCD     : 25   :     :     :
+         :       :        :      :         :      :     :     :

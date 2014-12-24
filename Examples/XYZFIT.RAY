@@ -1,0 +1,23 @@
+ 12 rays  XYZFIT.RAY specify datapoints (X0,Y0,Zgoal) here
+  X0         Y0        Zgoal       Z0      notes       Zfinal
+----------:----------:---------::-------::----------:----.-----:
+   0      :  -4      :  2.71227:: -1    ::          :          :
+   0      :  -2      :  0.92032:: -1    ::          :          :
+   0      :  +2      :  0.74470:: -1    ::          :          :
+   0      :  +4      :  2.16934:: -1    ::          :          :
+   1      :  -4      :  2.73148:: -1    ::          :          :
+   1      :  -2      :  0.93180:: -1    ::          :          :
+   1      :  +2      :  0.75574:: -1    ::          :          :
+   1      :  +4      :  2.18530:: -1    ::          :          :
+   2      :  -4      :  3.16212:: -1    ::          :          :
+   2      :  -2      :  1.17430:: -1    ::          :          :
+   2      :  +2      :  0.98853:: -1    ::          :          :
+   2      :  +4      :  2.53235:: -1    ::          :          :
+          :          :         ::       ::          :          :
+  Your surface measurements go into X0,Y0,Zgoal columns.       :
+  The Z0 numbers are only to guarantee nonzero rays.           :
+  The Zfinal numbers will show your fit to each point.         :
+  Be sure to use many many more rays than you have unknowns    :
+  in your .OPT table.          ::       ::          :          :
+          :          :         ::       ::          :          :
+          :          :         ::       ::          :          :

@@ -1,0 +1,7 @@
+ 3  surfaces    Ellipsoid.OPT                                        4
+ Diam    Zsurface   curve   Shape     Type?   Group
+-------:---------:--------:--------:---------:-------:----
+   4   :   0     :   1    :  0.25  :  Mirror : ellip :
+   4   :   8     :  -1    :  0.25  :  Mirror : ellip :
+   1   :  7.4641 :        :        :  film   :       :
+       :         :        :        :         :       :
