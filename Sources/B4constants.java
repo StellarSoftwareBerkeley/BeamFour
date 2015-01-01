@@ -16,7 +16,7 @@ interface B4constants
     static final String  PRODUCT    = "BEAM FOUR  "; 
     static final String  RELEASE    = "Release 166, Dec 2014";
     // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
-    static final String  COMPILER   = "Compiler: unknown";
+    static final String  COMPILER   = "Compiler: unspecified";
     static final String  COPYRIGHT  = "(c) 2014 Stellar Software"; 
 
     static final int BLINKMILLISEC      = 300; // millisec
