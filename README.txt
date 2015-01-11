@@ -6,7 +6,7 @@ End Users:
   the executable ray tracer is in JARs
   the users guide is in Documentation
   the example files are in Examples
-  the entire user package is available at "Download ZIP"
+  the entire user package is available at end-users "Download ZIP"
 
 Developers:
   Documentation::DevelopmentNotes.txt is a chronological change log.
