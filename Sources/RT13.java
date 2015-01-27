@@ -5,14 +5,26 @@ import java.text.DecimalFormat; // for debugging only
 /** This file contains public class RT13 and private class MinFit
   *
   *
-  * 
+  *
+  * Schematic ray loop, without bailouts:
+  *
+  *    for (j=1; j<=nsurfs; j++)
+  *    {
+  *        labtovx(ray[j-1], ray[j], surf[j]); // translate then rotate to localframe
+  *        d = dIntercept(ray[j], surf[j]);    // evaluate distance to intercept
+  *        vPropagate(ray[j], d, surf[j]);     // advance ray to surface
+  *        iRedirect(ray[j], surf[j]);         // redirect ray in local frame
+  *        vxtolab(ray[j], surf[j]);           // rotate then translate to labframe
+  *    }
   *
   *
   *    PHANTOM HYPERBOLOIDS DO NOT EXIST  "mis"
   *    FARSIDE ELLIPSOIDS DO NOT EXIST    "mis"
   *
+  *
+  * A166 Jan 2015: reworked redirectors CBin, CBout: now copies local to local.
   * A154: installed Bimodal lens, new logic; TIR failures...
-  * A148: removed bimodal lenses.
+  * A148: removed Bimodal lenses.
   * A147: installing Bimodal lens that can bypass a Dia or dia fault.
   *  new optics surface types: OTBLFRONT, OTBLBACK;
   *  new ray failure codes:  RRBII, RRBIO
@@ -109,7 +121,7 @@ import java.text.DecimalFormat; // for debugging only
   *
   * Solvers provide recommended ray distances "d" but do not propagate.
   * Reason: there is sanity testing for each recommended solution. 
- j* Especially so with Groups!
+  * Especially so with Groups!
   *
   * Main loop bRunray() must explicitly propagate, then call iDiams() for logic.
   * 
@@ -281,7 +293,7 @@ class RT13 implements B4constants
     // Runs a single ray. If kray==0, random ray; else table ray.
     // Outputs to runray[g][attrib] and   jfound[kray][group].
     // Returns TRUE if raystatus == RROK, else FALSE.
-    // M.Lampton STELLAR SOFTWARE (C) 2012. 
+    // M.Lampton STELLAR SOFTWARE (c) 2012. 
     {
         int nsurfs = DMF.giFlags[ONSURFS]; 
         int ngroups = DMF.giFlags[ONGROUPS]; 
@@ -1783,9 +1795,9 @@ class RT13 implements B4constants
                      return iSnell(rayseq[g], surf, j);  
              case OTSCATTER:
                    return iScatter(rayseq[g], surf); 
-             case OTCBIN:
+             case OTCBIN:  // CoordBreak input surface
                    return iCBIN(rayseq, surf, g);  // copy previous local uvw
-             case OTCBOUT:  
+             case OTCBOUT: // CoordBreak output surface 
                    return iCBOUT(rayseq, surf, g); // copy previous local xyzuvw
         }
 
@@ -1793,23 +1805,24 @@ class RT13 implements B4constants
     }
     
     static private int iCBIN(double rayseq[][], double surf[], int g)
-    // Must copy previous local uvw into this uvw here at group "g"
+    // CoordBreak CBin input surface method
+    // Must do nothing: CBout will grab local coords here.
     // THIS WORKS ONLY IF j>1
     {
-        if (g>1)
-        {
-            rayseq[g][RTUL] = rayseq[g-1][RTUL]; 
-            rayseq[g][RTVL] = rayseq[g-1][RTVL]; 
-            rayseq[g][RTWL] = rayseq[g-1][RTWL]; 
-        }
+        // if (g>1)
+        // {
+        //     rayseq[g][RTUL] = rayseq[g-1][RTUL]; 
+        //     rayseq[g][RTVL] = rayseq[g-1][RTVL]; 
+        //     rayseq[g][RTWL] = rayseq[g-1][RTWL]; 
+        // }
         return RROK; 
     }
     
     static private int iCBOUT(double rayseq[][], double surf[], int g)
-    // Must copy local xyzuvw into this local ray group "g"
-    // THIS WORKS ONLY IF g>2
+    // CoordBreak CBout output surface method
+    // Must copy previous local xyzuvw into this local surface.
     {
-        if (g>2)
+        if (g>1)
         {
             rayseq[g][RTXL] = rayseq[g-1][RTXL]; 
             rayseq[g][RTYL] = rayseq[g-1][RTYL]; 
