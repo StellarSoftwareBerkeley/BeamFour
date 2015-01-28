@@ -14,7 +14,7 @@ import java.awt.*;   // Color
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 166, Dec 2014";
+    static final String  RELEASE    = "Release 166, 28 Jan 2015";
     // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
     static final String  COMPILER   = "Compiler: Javac 1.8.0_20";
     static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 

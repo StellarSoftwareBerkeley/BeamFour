@@ -170,7 +170,7 @@ class OEJIF extends EJIF
                                RT13.surfs[jsurf][OTYPE] = OTCBOUT; 
                                break; 
                            }
-                           break;  // 8 Oct 2014 Xlint fallthrough warning
+                           break;
                  default: RT13.surfs[jsurf][OTYPE] = OTLENS; break; 
                }
                typetag[jsurf] = getTag(ifield, 2+jsurf); 
@@ -314,10 +314,20 @@ class OEJIF extends EJIF
           return; 
 
         //----data are now cleansed stashed & indexed------------
-        //-------Perform all the post-parse work here------------        
+        //-------Perform all the post-parse cleanup here------------        
 
         DMF.giFlags[ONADJ] = iParseAdjustables(nsurfs);
-
+        
+        //----force all CoordBreaks to be planar-----------
+        for (int j=1; j<nsurfs; j++)
+          if ((RT13.surfs[j][OTYPE]==OTCBIN) || (RT13.surfs[j][OTYPE]==OTCBOUT))
+          {
+              RT13.surfs[j][OPROFILE] = OSPLANO; 
+              for (int iatt=OCURVE; iatt<=OZ35; iatt++)
+                RT13.surfs[j][iatt] = 0.0; 
+          }
+          
+          
         //-------evaluate diameters DIAX, DIAY-------------------
         for (int j=1; j<=nsurfs; j++)
         {
