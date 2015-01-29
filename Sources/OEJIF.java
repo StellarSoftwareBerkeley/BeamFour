@@ -232,7 +232,7 @@ class OEJIF extends EJIF
         }
               
       
-        //-----------glasses: sometimes numerical data--------------
+        //----------refraction: sometimes numerical data--------------
         //---if refraction LUT is needed, OREFRACT will be NaN.----
 
         for (int jsurf=1; jsurf<=nsurfs; jsurf++)
@@ -471,18 +471,18 @@ class OEJIF extends EJIF
 
             boolean bPoly = false; 
             for (int i=OA1; i<=OA14; i++)
-              if (!U.isNegZero(RT13.surfs[j][i]) || isAdjustable(j,i))
+              if ((0 != RT13.surfs[j][i]) || isAdjustable(j,i))
                 bPoly = true;
 
             //----Zernike flag and diameter test-----------------
             
             boolean bZern = false; 
             for (int i=OZ00; i<=OZ35; i++)
-              if (!U.isNegZero(RT13.surfs[j][i]) || isAdjustable(j,i))
+              if ((0 != RT13.surfs[j][i]) || isAdjustable(j,i))
                 bZern = true;
                 
             if (bZern && (RT13.surfs[j][OODIAM] == 0.0)) 
-              badZern = true; 
+              badZern = true; // gives warning "Zernikes require Diameters"
 
             //-------upgrade if poly or zern is present--------
 
