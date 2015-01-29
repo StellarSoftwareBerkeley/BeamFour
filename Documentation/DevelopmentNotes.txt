@@ -1,7 +1,46 @@
 
+27-29 Jan 2015
+Rewriting CoordBreak redirectors CBin, CBout in RT13.java
 
-29 Dec 2014   Removed defined constants DEMO and DEMOSTR from all classes.
+  What should happen is redirector CBin should do nothing.
+  Its ray locations and orientations should be automatically captured
+  by the preceding calls to labtovx() and vPropagate().
+  Why do we need it? (a) it is a convenient adjustable catcher;
+  (b) it guarantees that Layout knows which ray segments not to draw.
+
+  What should happen in the redirector CBout is:
+  local coordinates furnished by its labtovx() and vPropagate should
+  get overwritten by grabbing the local coordinates from CBin. 
+  The subsequent conversion to labframe is done by vxtolab().
+
+^^Updated RT13.java 27 Jan 2015.
+
+CoordBreaks are planar; Layout reveals some inconsistent artwork
+when a curvature is assigned.  OEJIF should zero out all the
+curvatures and polynomials when a CB is detected.  
+^^ Updated OEJIF.java  28 Jan 2015
+^^ and eliminated complaint about "Zernikes require Diameters"
+CoordBreak planarity should be carefully documented in the end user files.
+
+
+====Schematic ray loop, without bailouts=============
+
+  for (j=1; j<=nsurfs; j++)  
+  {
+      labtovx(ray[j-1], ray[j], surf[j]); // translate then rotate to localframe
+      d = dIntercept(ray[j], surf[j]);    // evaluate distance to intercept
+      vPropagate(ray[j], d, surf[j]);     // advance ray to surface
+      iRedirect(ray[j], surf[j]);         // redirect ray in local frame
+      vxtolab(ray[j], surf[j]);           // rotate then translate to labframe
+  }
+
+
+==========A166 initial publish on GitHub=============
+
+29 Dec 2014   Removed defined constants DEMO and DEMOST from all classes.
   There is no demo edition in 166 and following revisions.
+
+Verified clean compile with Xlint under javac 1.5.0 and 1.8.0.
 
 21 Dec 2014   A166_1.8.0  TO DO: understand & fix Coordinate Break issues.
   When a CBin/CBout pair follows a nontilted surface, it works OK
@@ -17,6 +56,7 @@
   Yikes, curved CBs are OK but there is a numerical direction error U=-0.003 radian
   introduced at rows 12-13 in the file Echo22-fwd-fourCB.OPT, Echo22-fwd-fourCB.RAY.
   Problem persists with flat CBs.  Only CB #3 is at fault; CBs 1, 2, and 4 are OK.
+  Only CB#3 follows a tilted optical surface.  Explore tilts & pitches.
 
 4 Dec 2014:  added Zout to Xout and Yout in MAP. Global not local coords for ray starts.
 
