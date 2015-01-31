@@ -144,7 +144,7 @@ class OEJIF extends EJIF
                  case 'M': RT13.surfs[jsurf][OTYPE] 
                              = (c4=='A') ? OTMIRRARRAY : OTMIRROR; break; 
 
-                 // phantom is just a lens with equal indices.
+                 // phantom is just a refracting surface with equal indices.
 
                  case 'r':
                  case 'R': RT13.surfs[jsurf][OTYPE] = OTRETRO; break; 
@@ -318,14 +318,14 @@ class OEJIF extends EJIF
 
         DMF.giFlags[ONADJ] = iParseAdjustables(nsurfs);
         
-        //----force all CoordBreaks to be planar-----------
-        for (int j=1; j<nsurfs; j++)
-          if ((RT13.surfs[j][OTYPE]==OTCBIN) || (RT13.surfs[j][OTYPE]==OTCBOUT))
-          {
-              RT13.surfs[j][OPROFILE] = OSPLANO; 
-              for (int iatt=OCURVE; iatt<=OZ35; iatt++)
-                RT13.surfs[j][iatt] = 0.0; 
-          }
+        //----force all CoordBreaks to be planar? or not? rev 168----
+        // for (int j=1; j<nsurfs; j++)
+        //   if ((RT13.surfs[j][OTYPE]==OTCBIN) || (RT13.surfs[j][OTYPE]==OTCBOUT))
+        //   {
+        //       RT13.surfs[j][OPROFILE] = OSPLANO; 
+        //       for (int iatt=OCURVE; iatt<=OZ35; iatt++)
+        //         RT13.surfs[j][iatt] = 0.0; 
+        //   }
           
           
         //-------evaluate diameters DIAX, DIAY-------------------
@@ -474,7 +474,9 @@ class OEJIF extends EJIF
               if ((0 != RT13.surfs[j][i]) || isAdjustable(j,i))
                 bPoly = true;
 
-            //----Zernike flag and diameter test-----------------
+            //----Zernike flag and diameter test  -----------------
+            //---CoordinateBreaks set zernikes to zero, not -0  -----
+            //---here it is important to accept zeros---------------
             
             boolean bZern = false; 
             for (int i=OZ00; i<=OZ35; i++)

@@ -14,7 +14,7 @@ import java.awt.*;   // Color
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 166, 28 Jan 2015";
+    static final String  RELEASE    = "Release 168, 30 Jan 2015";
     // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
     static final String  COMPILER   = "Compiler: Javac 1.8.0_20";
     static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 
@@ -796,7 +796,6 @@ interface B4constants
           {"Center: blank=auto",     ""},  // 8
           {"Parallax variable",      ""},  // 9
           {"Parallax step",          ""},  // 10
-          
           {"Variable",             "U0"},  // 11, vert axis
           {"Step size",         "0.001"},  // 12
           {"How many points?",     "10"},  // 13
@@ -806,8 +805,7 @@ interface B4constants
           {"Parallax step",          ""},  // 17
           {"Max % vignetting",     "33"},  // 18
           {"Width/Height",        "1.0"},  // 19
-          {"Black Bkg",             "F"},  // 20
-          {"Out file",               ""}   // 21
+          {"Text output filename",   ""}   // 20
        },
 
        {  // group 6 = UO_PLOT3

@@ -1,4 +1,4 @@
-README for BEAM FOUR Optical Ray Tracer release 166
+README for BEAM FOUR Optical Ray Tracer release 168
 Product information: see www.StellarSoftware.com
 Inquiries:  write to     info@StellarSoftware.com
 
@@ -11,4 +11,4 @@ End Users:
 Developers:
   Documentation::DevelopmentNotes.txt is a chronological change log.
   Documentation::Compiling.txt lists all files and classes.
-  Sources contains the 37 .java source files for rel 166.
+  Sources contains the 37 .java source files for rel 168.

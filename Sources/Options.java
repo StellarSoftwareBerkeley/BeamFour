@@ -564,11 +564,10 @@ class Options extends JMenu implements B4constants
 
         LabelDataBox percent = new LabelDataBox(UO_MAP, 18, NCHARS); 
         LabelDataBox aspect = new LabelDataBox(UO_MAP, 19, NCHARS); 
-        LabelBitBox black = new LabelBitBox(UO_MAP, 20); 
-        LabelDataBox outbox = new LabelDataBox(UO_MAP, 21, 20); 
+        LabelDataBox outbox = new LabelDataBox(UO_MAP, 20, 20); 
 
         int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {bhrb, bmbH, bmbV, percent, aspect, black, outbox},
+           new Object[] {bhrb, bmbH, bmbV, percent, aspect, outbox},
            "Map Options", 
            JOptionPane.OK_CANCEL_OPTION, 
            JOptionPane.PLAIN_MESSAGE,
@@ -597,9 +596,8 @@ class Options extends JMenu implements B4constants
 
             DMF.reg.putuo(UO_MAP, 18, percent.getText()); 
             DMF.reg.putuo(UO_MAP, 19, aspect.getText()); 
-            DMF.reg.putuo(UO_MAP, 20, black.isSelected() ? "T" : "F"); 
-            DMF.reg.putuo(UO_MAP, 21, outbox.getText());  
-
+            DMF.reg.putuo(UO_MAP, 20, outbox.getText());  
+            
             updateAllInstances("Map"); 
         }
     } //----end of doMapDialog------

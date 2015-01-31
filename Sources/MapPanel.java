@@ -8,7 +8,8 @@ import java.awt.event.*;   // Events
 
 @SuppressWarnings("serial")
 
-/** 2012: Scales added for HorVar and VertVar
+/** 2015: improved output text file, including .CSV format.
+  * 2012: Scales added for HorVar and VertVar
   * 2011: With this plan every options starts a fresh new run.
   * But... changes in the optics or ray tables do not start a fresh run.
   * In MultiPlot, they do. 
@@ -110,6 +111,7 @@ public class MapPanel extends GPanel // implements Runnable
     //------data from user options------
     
     private int     mapType=-1; 
+    private String  sType[] = {"rmsWFE", "pvWFE", "rmsPSF", "rssPSF"}; 
     private String  sHvar,  sVvar;
     private double  dHstep, dVstep;
     private int     nH,     nV;
@@ -122,7 +124,7 @@ public class MapPanel extends GPanel // implements Runnable
     private int     maxVig;         // percent
     private int     minGood;        // = nRays*(1-0.01*maxVig) or 2
     private double  aspect;
-    private boolean blackbkg; 
+    private boolean bCSV; 
     private String  sOutfile; 
     private boolean bOutfile; 
     
@@ -274,6 +276,7 @@ public class MapPanel extends GPanel // implements Runnable
             mapType = i; 
         if (mapType < 0)
           return "No map type selected"; 
+          
 
         sHvar  = DMF.reg.getuo(UO_MAP, 4).trim(); 
         dHstep = U.suckDouble(DMF.reg.getuo(UO_MAP,5)); 
@@ -294,10 +297,16 @@ public class MapPanel extends GPanel // implements Runnable
         minGood = U.minmax(minGood, 2, nrays); 
         aspect = U.suckDouble(DMF.reg.getuo(UO_MAP,19)); // usually 1.0
         aspect = Math.min(4.0, Math.max(0.5, aspect));   // usually 1.0
-        blackbkg = DMF.reg.getuo(UO_MAP, 20) == "T"; 
+
         maxBunches = nH*nV; 
-        sOutfile = DMF.reg.getuo(UO_MAP, 21).trim(); 
+        sOutfile = DMF.reg.getuo(UO_MAP, 20).trim(); 
         bOutfile = sOutfile.length() > 0; 
+        if (bOutfile)
+        {
+            String temp = sOutfile.toUpperCase(); 
+            bCSV = temp.endsWith(".CSV");
+        }
+
 
         //----test the map parameters for validity----
         
@@ -334,7 +343,7 @@ public class MapPanel extends GPanel // implements Runnable
         if (bOutfile)
         {
             sList = new ArrayList<String>(); 
-            String s = " parms= "+sHvar+"   "+sVvar; 
+            String s = "  "+sHvar+",   "+sVvar+",  Ngood,   Xf,   Yf,   Zf,  "+sType[mapType]; 
             sList.add(s); 
         }
 
@@ -541,12 +550,14 @@ public class MapPanel extends GPanel // implements Runnable
             }
             if (bOutfile)
             {
-                String s = U.fwd(dH1,16,9)
-                  +U.fwd(dV1,16,9)
-                  +U.fwi(ngood,9)
-                  +U.fwd(getAverage(RX),16,6)  // global coords for X0, Y0, Z0.
-                  +U.fwd(getAverage(RY),16,6)
-                  +U.fwd(getAverage(RZ),16,6);  // added 4 Dec 2014
+                char c = bCSV ? ',' : ' ';
+                String s = U.fwd(dH1,16,9)+c
+                  +U.fwd(dV1,16,9)+c
+                  +U.fwi(ngood,9)+c
+                  +U.fwd(getAverage(RX),16,6)+c  // centroid Xfinal
+                  +U.fwd(getAverage(RY),16,6)+c  // centroid Yfinal
+                  +U.fwd(getAverage(RZ),16,6)+c  // centroid Zfinal
+                  +U.fwd(d,16,9);                // selected metric
                 sList.add(s); 
             }
         }
@@ -721,18 +732,8 @@ public class MapPanel extends GPanel // implements Runnable
         //----start the drawing-----------
 
         clearXYZO();       
-        // This call clears initial quadlist
-        
-        if (blackbkg)
-        {
-            addXYZO(SETBLACKBKG);
-            addXYZO(SETCOLOR + WHITE); 
-        }
-        else
-        {   
-            addXYZO(SETWHITEBKG);
-            addXYZO(SETCOLOR + BLACK); 
-        }
+        addXYZO(SETWHITEBKG);
+        addXYZO(SETCOLOR + BLACK); 
         addXYZO(1.0, SETSOLIDLINE);
         
         //-----draw the currently done color boxes-------------
@@ -774,10 +775,7 @@ public class MapPanel extends GPanel // implements Runnable
   
         //-----display the stepped parameter names------
         
-        if (blackbkg)
-          addXYZO(SETCOLOR + WHITE);
-        else
-          addXYZO(SETCOLOR + BLACK); 
+        addXYZO(SETCOLOR + BLACK); 
         for (int k=0; k<sHvar.length(); k++)
         {
             int ic = (int) sHvar.charAt(k) + iFontcode; 
@@ -883,10 +881,8 @@ public class MapPanel extends GPanel // implements Runnable
 
         //----add labels to the thermometer----
 
-        if (blackbkg)
-          addXYZO(SETCOLOR + WHITE);
-        else
-          addXYZO(SETCOLOR + BLACK); 
+
+        addXYZO(SETCOLOR + BLACK); 
 
         String s[] = new String[3]; 
         s[0] = U.fwe(mindatum); 
