@@ -1,0 +1,11 @@
+ 1 surface  XYZFIT.OPT fits this surface to (X0,Y0,Zgoal) in .RAY
+   X         Y          Z          C         Shape       pitch
+----.-----:----.-----:----.-----:----.-----:----.-----:----.-----:
+    0     ?    0     ?    0     ?    0     ?    0     ?    0     ?
+          :          :          :          :          :          :
+          :          :          :          :          :          :
+  These zeros are starting values for the unknown fit parameters.:
+  Autoadjust will tune them for best fit to your list of data    :
+  points, which you specify as X0, Y0, Zgoal in your .RAY table. :
+          :          :          :          :          :          :
+          :          :          :          :          :          :

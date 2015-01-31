@@ -1,0 +1,24 @@
+3  surfaces                    DROPLET.OPT                                     
+   Index of refractive medium   Zvalue of vertex     Curvature     Diameter    
+------------------------------:------------------:--------------:-------------:
+       1.0                    :   1.0            :  1.0         :   2.0       :
+       1.41421356237309505    :   3.0            : -1.0         :   2.0       :
+       1.0                    :   4.0            :  0.0         :             :
+                              :                  :              :             :
+                              :                  :              :             :
+                              :                  :                            :
+     This example is a spherical droplet having a refractive index = root 2.  :
+     A parallel incident beam exits the back side, but the ray just tangent   :
+     to the edge of the sphere is refracted by 45 degrees to meet the axis.   :
+                              :                  :                            :
+     This example is all-refractive, and so no column for surface type is     :
+     needed;  the default is refractive.         :                            :
+                              :                  :                            :
+     Also, the surfaces are spherical, which again is the default if no       :
+     explicit "shape" column is used.            :                            :
+                              :                  :                            :
+                              :                  :                            :
+                              :                  :                            :
+                              :                  :                            :
+                              :                  :                            :
+

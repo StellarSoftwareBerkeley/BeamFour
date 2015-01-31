@@ -1,0 +1,7 @@
+ 4 surfaces   OFFNERoffset.OPT
+   Z         Curv     Type      Diam  f   OffOy
+----------:---------:---------:------:-:---------:-----
+   10.0   : -0.1    : Mirror  :   3  :S:  -2.5   :
+    5     : -0.2    : Mirror  :   2  : :         :
+   10.0   : -0.1    : Mirror  :   3  :S:  +2.5   :
+    0     :   0     :         :   7  : :         :
