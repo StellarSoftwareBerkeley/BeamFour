@@ -1,0 +1,23 @@
+ 3 surfaces                 GRAZE.OPT                                          
+   Diam   diam    Zvx     Curv     shape   Mir/Len                             
+--------:-----:--------:--------:--------:--------:---------------------------:
+   3.3  : 1.2 :  4.20  : -2.50  :  0.00  : Mirror :  shape=0 means paraboloid :
+   1.2  : 0.1 :  4.05  :-10.00  ?  0.00  ? Mirror <  ditto.                   :
+   1.0  :  0  :  7.00  :        :        : Exit   :                           :
+        :     :        :        :        :        :                           :
+        :     :        :        :        :        :                           :
+    This is an example of a grazing incidence telescope.                      :
+    It is used with nearly parallel incoming light -- often x-rays.           :
+    The first reflection is from a concave paraboloid.                        :
+    The second reflection is at a convex smaller paraboloid.                  :
+    The outgoing light is again parallel, but concentrated.                   :
+        :     :        :        :        :        :                           :
+        :     :        :        :        :        :                           :
+    Note the "<" in the tag column of the second mirror.                      :
+    At grazing incidence, it is often necessary to specify                    :
+    taking the shorter-ray-segment intercept, rather than the                 :
+    usual default intercept closer to the vertex.  That is                    :
+    what the "<" specifies.  Try removing it and see.                         :
+        :     :        :        :        :        :                           :
+        :     :        :        :        :        :                           :
+        :     :        :        :        :        :                           :

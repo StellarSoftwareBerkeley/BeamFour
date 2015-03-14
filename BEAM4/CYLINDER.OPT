@@ -1,0 +1,8 @@
+ 3 surfaces   CYLINDER.OPT
+ index    Z    Curvature   CX   lens?    f
+-------:-----:----------:-----:---------:-:-
+       :  1  :    1     :  0  :  lens   :s:
+  1.55 :  2  :   -1     :  0  :  lens   :s:
+       :  3  :          :     :  film   :s:
+       :     :          :     :         : :
+       :     :          :     :         : :

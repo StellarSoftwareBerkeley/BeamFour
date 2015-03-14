@@ -1,0 +1,6 @@
+2  surfaces TORIC2NULL.OPT   null test concave toric parabola
+  Z      Curv    asph      Cx       mir?     form
+------:--------:--------:--------:---------:-------:--------------------
+ 1.0  :  -0.5  : -1.0   :  -1.0  :  mir    : square:
+ 0.0  :        :        :        :         :       :
+      :        :        :        :         :       :
