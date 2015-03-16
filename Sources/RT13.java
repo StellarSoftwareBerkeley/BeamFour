@@ -4,7 +4,7 @@ import java.text.DecimalFormat; // for debugging only
 
 /** This file contains public class RT13 and private class MinFit
   *
-  *
+  *  A169 March 2015: Added RTANGLE each intercept ray dot normal, in iRedirect.
   *
   * Schematic ray loop, without bailouts:
   *
@@ -44,7 +44,7 @@ import java.text.DecimalFormat; // for debugging only
   *   Computes all ganged goals
   *   Computes WFE, using MinFit for pupil piston & slopes
   *
-  * rev 137, simplified, with NO GROUPS; see bRunray(), line 444.
+  * rev 137, simplified, with NO GROUPS; see bRunOneRay(), line 288
   *
   * rev 134, Feb 2012: installed iGetPosRoots() to simplify dQuadsolve(). 
   *   this new routine means that BAK roots can be promptly dismissed
@@ -189,9 +189,8 @@ class RT13 implements B4constants
 
     public static double  refractLayoutShading[] = new double[MAXSURFS+1]; 
     public static boolean bGoodRay[] = new boolean[MAXRAYS+1]; 
-    public static int     iWFEgroup[] = new int[MAXRAYS+1]; // input from REJIF
-
-
+    public static int     iWFEgroup[] = new int[MAXRAYS+1];    // input from REJIF
+    // public static double     dot[] = new double[MAXRAYS+1];  // moved into attribs
     
 
     /*------------------------------------------------------*/
@@ -202,13 +201,13 @@ class RT13 implements B4constants
     // Accesses any one ray trace result, after iBuildRays() has been run.
     // "g" is the desired group number.
     {
-        if ((iattrib >= RX) && (iattrib <= RTWL))
+        if ((iattrib >= RX) && (iattrib < RTWFE))  // now includes RTDOT
         {
             double x = dRays[kray][g][iattrib];
             return x; 
         }
         if (iattrib == RTWFE)
-          return dWFE[kray]; //--special array for WFE---
+          return dWFE[kray]; //--why use a special array for WFE?
         return -0.0; 
     }
 
@@ -273,19 +272,22 @@ class RT13 implements B4constants
         for (int k=1; k<=gnrays; k++)
           if (bAll || bGoodRay[k])
           {
-              boolean bOK = bRunOneRay(k);  // Maybe write directly to dRays[][][]?
+              boolean bOK = bRunOneRay(k);  // copy to dRays[][][] from each rayseq[][].
               if (bOK)
                 ngood++; 
               if (bAll)
                 bGoodRay[k] = bOK;
               for (int grp=0; grp<=howfar[k]; grp++)
                 for (int iatt=0; iatt<RNATTRIBS; iatt++)
-                  dRays[k][grp][iatt] = rayseq[grp][iatt];
+                  dRays[k][grp][iatt] = rayseq[grp][iatt];  // also in bRunOneRay() ???
+                  
+              // dot[k] = getDot(rayseq[howfar[k]], surfs[gnsurfs], k);  // line 1853; rayseq[group][iattr].  
+              // System.out.println("  ....RT13 result dot["+k+"]= "+U.fwd(dot[k],12,6));          
           }
 
         doWFEtask(ngood, gnrays, gngroups); 
         return ngood; 
-    }
+    } //---end of iBuildRays()------
 
 
 
@@ -364,9 +366,7 @@ class RT13 implements B4constants
             }
 
             if (stat[kray]==RROK)          
-            {
-                stat[kray] = iRedirect(rayseq, surfs[j], j, g);   // TIR, etc
-            }
+              stat[kray] = iRedirect(rayseq, surfs[j], j, g);   // TIR, whatever.
 
             vxtolab(rayseq[g], surfs[j]);  // update all coordinates; no more motions. 
 
@@ -385,12 +385,13 @@ class RT13 implements B4constants
               break; 
         }
 
-        if (RROK==stat[kray])      // update the ray table
+        if (RROK==stat[kray])  // update the ray table; but also in iBuildRays() ???
         {
             for (int g=0; g<=howfar[kray]; g++)
               for (int iatt=0; iatt<RNATTRIBS; iatt++)
                 dRays[kray][g][iatt] = rayseq[g][iatt];
         }
+
         return (RROK==stat[kray]);   // return success or failure
 
     } //--------end of bRunOneRay()-----------------------
@@ -621,9 +622,6 @@ class RT13 implements B4constants
     }
 
 
-
-
-
     static public void setEulers()
     // Generate matrix converting local to lab frame. 
     // Use transpose to convert lab frame to local. 
@@ -686,9 +684,6 @@ class RT13 implements B4constants
     private static int    ngood = 0; 
     
     
-    
-
-
 
     static private void doWFEtask(int gngood, int gnrays, int gnsurfs)
     // Run this after each ray trace regardless of presence of WFEcolumn.
@@ -904,8 +899,10 @@ class RT13 implements B4constants
 
         //----Clear out entire rayseq[] from previous run------
         for (int j=0; j<=MAXSURFS; j++)
-          for (int i=RX; i<=RTWL; i++)
-            rayseq[j][i] = -0.0;
+        {
+            for (int i=RX; i<=RTWL; i++)
+              rayseq[j][i] = -0.0;
+        }
 
         //-----set up for distributions--------------
 
@@ -1124,11 +1121,6 @@ class RT13 implements B4constants
         double y = (40./7.)*x*x*x - (48./7.)*x*x*x*x*x; 
         return bLower ? y : 1-y; 
     } 
-
-
-
-
-
 
 
     static private double dGetFunc(double ray[], double surf[])
@@ -1767,6 +1759,7 @@ class RT13 implements B4constants
     // Receives status from preceding Diam() check. 
     // Returns RROK, RRUNK, RRORD, RRTIR. 
     {
+        vSetAngle(rayseq[g], surf);  // fills in RTANGLE field
         boolean bGroovy = surf[OGROOVY] != 0.0; 
         int surftype = (int) surf[OTYPE]; 
         switch(surftype)
@@ -1804,6 +1797,8 @@ class RT13 implements B4constants
         return RRNON; 
     }
     
+    
+        
     static private int iCBIN(double rayseq[][], double surf[], int g)
     // CoordBreak CBin input surface method
     // Must do nothing: CBout will grab local coords here.
@@ -1834,6 +1829,44 @@ class RT13 implements B4constants
         return RROK; 
     }
 
+
+    static private int iMirror(double ray[], double surf[])
+    // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
+    // method: r = i - 2 (i dot n) n
+    // note this is quadratic in n, hence independent of sign(n)
+    {
+        double[] norm = new double[13];
+        vGetPerp(ray, surf, norm); 
+        double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
+        ray[RTUL] -= 2.0 * dotin * norm[RTUL];
+        ray[RTVL] -= 2.0 * dotin * norm[RTVL];
+        ray[RTWL] -= 2.0 * dotin * norm[RTWL];
+        // normalize(ray);   // should be unnecessary!
+        return RROK;
+    }
+
+
+    static private void vSetAngle(double ray[], double surf[])
+    // M.Lampton STELLAR SOFTWARE (C) 2015
+    // uses iMirror() tools to get any intercept ray dot normal.
+    // called by iRedirect for good rays, fills in ray[RTANGLE]
+    {
+        double[] norm = new double[13];
+        vGetPerp(ray, surf, norm); 
+        // System.out.println("RT13: "+k+" ray[RTWL]="+U.fwd(ray[RTWL],12,6)+"  norm[RTWL]="+U.fwd(norm[RTWL],12,6)); 
+        double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
+        ray[RTANGLE] = U.arccosd(Math.abs(dotin)); 
+    }
+    
+
+    static private int iRetro(double ray[], double surf[])
+    {
+        ray[RTUL] *= -1.0; 
+        ray[RTVL] *= -1.0; 
+        ray[RTWL] *= -1.0; 
+        return RROK; 
+    }
+    
 
     static private int iSnell(double ray[], double surf[], int jsurf)
     // Caution: ray[13] is solved in local frame. 
@@ -1885,29 +1918,6 @@ class RT13 implements B4constants
     }
 
 
-    static private int iMirror(double ray[], double surf[])
-    // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
-    // method: r = i - 2 (i dot n) n
-    // note this is quadratic in n, hence independent of sign(n)
-    {
-        double[] norm = new double[13];
-        vGetPerp(ray, surf, norm); 
-        double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
-        ray[RTUL] -= 2.0 * dotin * norm[RTUL];
-        ray[RTVL] -= 2.0 * dotin * norm[RTVL];
-        ray[RTWL] -= 2.0 * dotin * norm[RTWL];
-        // normalize(ray);   // should be unnecessary!
-        return RROK;
-    }
-
-
-    static private int iRetro(double ray[], double surf[])
-    {
-        ray[RTUL] *= -1.0; 
-        ray[RTVL] *= -1.0; 
-        ray[RTWL] *= -1.0; 
-        return RROK; 
-    }
 
 
     static private int iScatter(double ray[], double surf[])

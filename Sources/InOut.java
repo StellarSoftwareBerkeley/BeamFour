@@ -12,8 +12,9 @@ import javax.swing.*;      // JOptionPane dialog
   *  If there are floating goals, Comparo (not InOut) updates ray table. 
   *
   *  Test giFlags[RWFEFIELD] >= 0 to see if WFEcalc is to be RMS'd.
-  * 
-  *  @author: M.Lampton (c) 2003 STELLAR SOFTWARE all rights reserved.
+  *  Added RDOT output field March 2015 MLL.
+  *
+  *  @author: M.Lampton (c) 2003 - 2105 STELLAR SOFTWARE all rights reserved.
   */
 class InOut implements B4constants
 {
@@ -99,13 +100,24 @@ class InOut implements B4constants
             
             for (int f=0; f<rnfields; f++)    // field loop
             {
-                // int op = rayEditor.rF2I[f]; // Xlint 8 Oct 2014
-                int op = REJIF.rF2I[f];        // replacement works
+                int op = REJIF.rF2I[f]; 
                 if (op == RNOTE)  // ray note message here....
                 {
                     String s = sResults[RT13.getStatus(kray)] + U.fwi(howfarLoop,2);
                     rayEditor.putField(f, row, s); 
                 }
+                /********** moved into regular ray processsing *****
+                else
+                if (op == RDOT)  // ray dot normal at final surface
+                {
+                    int fw = rayEditor.getFieldWidth(f); 
+                    if (fw > 3)
+                      rayEditor.putField(f, row, U.fwd(RT13.dot[kray], fw, fw-3)); 
+                      // rayEditor.putField(f, row, "hello"); 
+                    else
+                      rayEditor.putField(f, row, "---");
+                }
+                ******************************************************/
                 else
                 if (op == RDEBUG) // debugger message here....
                   rayEditor.putField(f, row, RT13.bGoodRay[kray] ? "OK" : "NG"); 

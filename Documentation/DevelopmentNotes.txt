@@ -1,4 +1,20 @@
 
+
+16 March 2015: A169, two improvements:
+
+In Histo1D, there is a new feature "ShowAverage" that calculates
+and displays the average histogrammed-variable value on the graphic.
+
+In Ray Attributes, there is a new "Angle" feature that resuscitates
+the old dot product  (RayVector dot NormalVector) that shows how far
+off the normal each ray is, arriving at its intercept.  UserGuide
+page 67 describes its use. 
+
+
+30 Jan 2015  rev 168: Can coordinate breaks be curved?
+  Rewriting OEJIF to eliminate their forced zero curvatures.
+  ^^ Works well. Be sure to match curvatures to avoid false power.
+
 27-29 Jan 2015
 Rewriting CoordBreak redirectors CBin, CBout in RT13.java
 
@@ -13,7 +29,7 @@ Rewriting CoordBreak redirectors CBin, CBout in RT13.java
   get overwritten by grabbing the local coordinates from CBin. 
   The subsequent conversion to labframe is done by vxtolab().
 
-^^Updated RT13.java 27 Jan 2015.
+^^Updated RT13.java 27 Jan 2015, A166.
 
 CoordBreaks are planar; Layout reveals some inconsistent artwork
 when a curvature is assigned.  OEJIF should zero out all the

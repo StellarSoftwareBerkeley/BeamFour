@@ -343,7 +343,8 @@ public class MapPanel extends GPanel // implements Runnable
         if (bOutfile)
         {
             sList = new ArrayList<String>(); 
-            String s = "  "+sHvar+",   "+sVvar+",  Ngood,   Xf,   Yf,   Zf,  "+sType[mapType]; 
+            String s = "  "+sVvar+",   "+sHvar+",  Ngood,   Xf,   Yf,   Zf,  "+sType[mapType]; 
+            // sVvar, sHvar reversed 16 Feb 2015
             sList.add(s); 
         }
 
@@ -551,8 +552,8 @@ public class MapPanel extends GPanel // implements Runnable
             if (bOutfile)
             {
                 char c = bCSV ? ',' : ' ';
-                String s = U.fwd(dH1,16,9)+c
-                  +U.fwd(dV1,16,9)+c
+                String s = U.fwd(dV1,16,9)+c     // reversed 16 Feb 2015
+                  +U.fwd(dH1,16,9)+c             // reversed 16 Feb 2015
                   +U.fwi(ngood,9)+c
                   +U.fwd(getAverage(RX),16,6)+c  // centroid Xfinal
                   +U.fwd(getAverage(RY),16,6)+c  // centroid Yfinal

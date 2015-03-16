@@ -664,15 +664,17 @@ class Options extends JMenu implements B4constants
 
 
     void doH1Ddialog(JFrame frame)
+    // 1D histogram options
     {
-        LabelDataBox var = new LabelDataBox(UO_1D, 0, NCHARS); 
-        LabelDataBox nbins = new LabelDataBox(UO_1D, 1, NCHARS); 
+        LabelDataBox var       = new LabelDataBox(UO_1D, 0, NCHARS); 
+        LabelDataBox nbins     = new LabelDataBox(UO_1D, 1, NCHARS); 
         BorVertRadioBox bounds = new BorVertRadioBox("", UO_1D, 2, 3); 
-        LabelDataBox hmin = new LabelDataBox(UO_1D, 5, NCHARS); 
-        LabelDataBox hmax = new LabelDataBox(UO_1D, 6, NCHARS); 
-
+        LabelDataBox hmin      = new LabelDataBox(UO_1D, 5, NCHARS); 
+        LabelDataBox hmax      = new LabelDataBox(UO_1D, 6, NCHARS); 
+        LabelBitBox average    = new LabelBitBox(UO_1D, 7); 
+        
         int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {var, nbins, bounds, hmin, hmax}, 
+           new Object[] {var, nbins, bounds, hmin, hmax, average}, 
            "Histogram 1Dim Options", 
            JOptionPane.OK_CANCEL_OPTION, 
            JOptionPane.PLAIN_MESSAGE,
@@ -688,7 +690,7 @@ class Options extends JMenu implements B4constants
 
             DMF.reg.putuo(UO_1D, 5, hmin.getText()); 
             DMF.reg.putuo(UO_1D, 6, hmax.getText()); 
-
+            DMF.reg.putuo(UO_1D, 7, average.isSelected() ? "T" : "F"); 
             updateAllInstances("Histo1Dim"); 
         }
     }
@@ -697,6 +699,7 @@ class Options extends JMenu implements B4constants
 
 
     void doH2Ddialog(JFrame frame)
+    // 2D histogram options
     {
         BorVertRadioBox display = new BorVertRadioBox("View", UO_2D, 0, 2); 
         LabelDataBox hvar     = new LabelDataBox(UO_2D, 2, NCHARS); 

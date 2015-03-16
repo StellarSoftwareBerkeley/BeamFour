@@ -7,14 +7,14 @@ import java.awt.*;   // Color
   * 
   * 
   *  All fields here are public static final. (H&C p.206)
-  *
+  *  Added RTDOT  ray dot normal any surface, March 2015 MLL. 
   *
   *  @author M.Lampton STELLAR SOFTWARE (c) 2004-2014 all rights reserved.
   */
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 168, 30 Jan 2015";
+    static final String  RELEASE    = "Release 169, 13 Mar 2015";
     // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
     static final String  COMPILER   = "Compiler: Javac 1.8.0_20";
     static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 
@@ -536,13 +536,15 @@ interface B4constants
     static final int RTUL           =    10; // dGetRay() local ray
     static final int RTVL           =    11; // dGetRay() local ray
     static final int RTWL           =    12; // dGetRay() local ray
-    static final int RTWFE          =    13; // dGetRay() special.
-    static final int RNATTRIBS      =    14; // how many ray output attribs
+    static final int RTANGLE        =    13; // dGetRay() global ray
+    static final int RTWFE          =    14; // dGetRay() special.
+    static final int RNATTRIBS      =    15; // how many ray output attribs
 
 /*-----------------ray table special calculation codes--------------------*/
 
     static final int RNOTE          =   133; // text output only
     static final int RDEBUG         =   134; // text output only
+    // static final int RDOT           =   135; // dot product numerical output
     static final int RFINAL         = 10000; // placeholder for 100*nsurfs term
     static final int RGOAL          = 10100; // input/output goal term
 
@@ -837,7 +839,8 @@ interface B4constants
           {"Diameter Bounds",  "F"},  // 3
           {"Manual Bounds",    "F"},  // 4
           {"Manual Min",        ""},  // 5
-          {"Manual Max",        ""}   // 6
+          {"Manual Max",        ""},  // 6
+          {"Show average",     "T"}   // 7
        },
 
        {  // group 8 = UO_2D

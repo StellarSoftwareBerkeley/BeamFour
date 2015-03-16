@@ -39,7 +39,10 @@ import java.io.*;          // Save as file
   * ...which forces a call to this.doTechList() thereby
   *  showing the current contents of the histogram. 
   *
-  * @author M.Lampton (c) STELLAR SOFTWARE 2004 all rights reserved.
+  *  A169 March 2015: added average display of histogrammed data;
+  *  also improved the typeface scaling and locations.
+  * 
+  * @author M.Lampton (c) STELLAR SOFTWARE 2004, 2015 all rights reserved.
   */
 public class H1DPanel extends GPanel
 {
@@ -67,6 +70,9 @@ public class H1DPanel extends GPanel
     private double vticks[] = new double[10];
     private String hst; 
      
+    private double sum = 0.0; 
+    private int    count = 0; 
+    private boolean bShowAverage = true; 
 
 
     public H1DPanel(GJIF gj) // the constructor
@@ -211,7 +217,7 @@ public class H1DPanel extends GPanel
     //---------private methods---------------
 
     private String getUOwarning()
-    // Evaluates UO fields.
+    // Evaluates User Option "UO" fields.
     // Local variables shadow H1D fields. 
     // First line of defense, must never crash. 
     {
@@ -302,8 +308,9 @@ public class H1DPanel extends GPanel
             }
         } 
 
-        //-------apply manual span if requested-----------
-
+        //-------apply manual span if requested----------------------
+        //--But shouldn't the manual span always come first,---------
+        //--so as to suppress the automatic span which might fail?---
         if ("T".equals(DMF.reg.getuo(UO_1D, 4)))
         {
             String sHmin = DMF.reg.getuo(UO_1D, 5); 
@@ -323,6 +330,8 @@ public class H1DPanel extends GPanel
         } 
 
         //---all done scaling data to histogram---------------
+
+        bShowAverage = "T".equals(DMF.reg.getuo(UO_1D, 7)); 
         
         //----set up GPanel affines for scaledItem()----
         //----never in doArt() or pan zoom will fail---
@@ -340,7 +349,8 @@ public class H1DPanel extends GPanel
         for (int kray=1; kray<=nrays; kray++)
           if (RT13.bGoodRay[kray])
             addRayToHisto(kray); 
-    } // end doParse().
+            
+    } //---end doParse().
 
 
     //---------ARTWORK BEGINS HERE----------------
@@ -359,7 +369,8 @@ public class H1DPanel extends GPanel
         double ytick = 0.5 * iWpoints * uyspan / dUOpixels;  
         double scaledH = iHpoints * uyspan / dUOpixels; 
         double yruler = -0.5;                       // unit plot box
-        double hyoffset = -0.7*scaledH;             // CenterOrigin
+        double ytop = 0.5;                          // unit plot box
+        double hyoffset = 0.7*scaledH;              // Char CenterOrigin
         double vyoffset = 0.0;
         double vrhgap = -0.2;                       // CenterOrigin
 
@@ -386,7 +397,7 @@ public class H1DPanel extends GPanel
         for (int k=0; k<shmin.length(); k++)
         {
             int ic = (int) shmin.charAt(k) + iFontcode; 
-            addScaledItem(x, yruler+hyoffset, 0.0, ic); 
+            addScaledItem(x, yruler-hyoffset, 0.0, ic); 
             x += scaledW; 
         }
 
@@ -395,7 +406,7 @@ public class H1DPanel extends GPanel
         for (int k=0; k<shmax.length(); k++)
         {
             int ic = (int) shmax.charAt(k) + iFontcode; 
-            addScaledItem(x, yruler+hyoffset, 0.0, ic); 
+            addScaledItem(x, yruler-hyoffset, 0.0, ic); 
             x += scaledW; 
         }
 
@@ -407,7 +418,7 @@ public class H1DPanel extends GPanel
         {
             int ic = (int) hst.charAt(k) + iFontcode; 
             x = scaledW*(k-nchars/2); 
-            addScaledItem(x, -0.5+2.5*hyoffset, ic); 
+            addScaledItem(x, yruler-hyoffset, ic); 
         }
 
         //-------v ruler at left and right-----------
@@ -446,7 +457,7 @@ public class H1DPanel extends GPanel
         for (int k=0; k<nchars; k++)
         {
             int ic = (int) vst.charAt(k) + iFontcode; 
-            double xvert = -0.5 + (k-nchars-5)*scaledW;
+            double xvert = -0.5 + (k-nchars-3)*scaledW;
             addScaledItem(xvert, 0.1, ic);
         }
 
@@ -463,6 +474,20 @@ public class H1DPanel extends GPanel
             int op = (i < nbins-1) ? PATHTO : STROKE; 
             addScaledItem(xhisto+dx, yhisto, op); 
         }
+
+        if (bShowAverage && (count > 0))
+        {
+            double average = sum/count; 
+            String sAverage = "avg=" +U.fwd(average,12,3).trim()+" n="+count; 
+            int nchar = sAverage.length(); 
+            for (int k=0; k<nchar; k++)
+            {
+                int ic = (int) sAverage.charAt(k) + iFontcode; 
+                x = scaledW*(k-nchar/2); 
+                addScaledItem(x, ytop+hyoffset, ic); 
+            }
+        }
+            
     } // end doTechList().
 
 
@@ -489,6 +514,8 @@ public class H1DPanel extends GPanel
         int ih = (int) Math.floor(nbins*(h-hmin)/(hmax-hmin)); 
         if ((ih>=0) && (ih<nbins))
           histo[ih]++; 
+        sum += h; 
+        count++; 
     }
 
 

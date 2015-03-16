@@ -33,7 +33,9 @@ import javax.swing.text.*;  // BadLocationException
   * and field numbers for those goals, so that each ray can
   * have its discrepancy computed. DCRFs are defined in OEJIF. 
   *
-  * @author M.Lampton (c) STELLAR SOFTWARE 2004 all rights reserved.
+  *  Added RTDOT attribute into RNATTRIBS, March 2015 MLL. 
+  *
+  * @author M.Lampton (c) STELLAR SOFTWARE 2004, 2015 all rights reserved.
   */
 class REJIF extends EJIF 
 {
@@ -283,8 +285,8 @@ class REJIF extends EJIF
 
         if (c0up == 'N')            // raynotes output field
           return RNOTE;
-        if (c0up == 'D')            // debugnotes output field
-          return RDEBUG;
+        if (c0up == 'D')    
+          return RDEBUG;   
         if (c0up == 'O')            // diffraction order input field
           return RSORDER;
         if (c0up == '@')            // wavelength input field.
@@ -328,6 +330,8 @@ class REJIF extends EJIF
             case 'u':  return bNonzero ? RTUL+surfcode : RU;
             case 'v':  return bNonzero ? RTVL+surfcode : RV;
             case 'w':  return bNonzero ? RTWL+surfcode : RW;
+            case 'A':
+            case 'a':  return RTANGLE+surfcode; 
             default:   return RABSENT;
         }
     }
