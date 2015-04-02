@@ -14,7 +14,9 @@ import javax.imageio.*;    // PNG, JPEG
 
 @SuppressWarnings("serial")
 
-/**
+/**  
+  * GPanel A172 adopting five quadLists and quadList tools.
+  * GPanel A172 installing finishList following randList. 
   *
   *
   * Abstract class GPanel handles all artwork and annotation.
@@ -26,7 +28,6 @@ import javax.imageio.*;    // PNG, JPEG
   *     protected void doTechList()  to create a new artwork tech list
   *     protected void doRotate()
   *     protected boolean doRandomRay()
-  *     protected void doFinishArt()
   *     protected void doCursor(i,j) to manage the cursor in user space
   *     protected double getStereo()
   *     protected void doSaveData()  to a file, for histograms
@@ -84,22 +85,23 @@ import javax.imageio.*;    // PNG, JPEG
   * Includes redo() which responds to Random.
   *
   * DRAMATIS PERSONAE
-  *    myTechList    is an ArrayList of XYZO "quads" from artwork generator.
-  *    biTech        is a bitmap that is screen compatible.
+  *    baseList    is an ArrayList of XYZO "quads" from artwork generator.
+  *    biTech        is a local private bitmap that is screen compatible.
   *    g2Tech        is a private Graphics2D context from biTech.  
   *    doTechList()  (abstract) is how we request new artwork from client. 
   *    renderList()  is the local method that draws any ArrayList onto a bitmap. 
   *
-  * General artwork: myTechList  -> g2Tech or g2CAD or g2Print.
-  * Random batch:    myBatchList -> g2Tech and blit to screen.
-  * Random accum:    myRandList  -> g2CAD or g2Print
-  * Annotation art:  myAnnoList  -> g2Local or g2CAD or g2Print.
-  *
+  * General artwork: baseList   -> g2Tech or g2CAD or g2Print.
+  * Random batch:    batchList  -> g2Tech and blit to screen.
+  * Random accum:    randList   -> g2CAD or g2Print
+  * Annotation art:  annoList   -> g2Tech or g2CAD or g2Print.
+  * Finish Layout:   finishList ->
+   
   * Caret blinking is handled by a BJIF timer that alternates caret=true, false, true...
   * and calls OS repaint() which calls local paintComponent(), hence drawPage(), 
   * which for each state does three things:
   *     1.  Blits biTech onto the current display; (quick!)
-  *     2.  Uses renderList(myAnnoList) to refresh annotation;
+  *     2.  Uses renderList(annoList) to refresh annotation;
   *     3.  Draws, or not, the caret block using setXORMode(). 
   * This is always blindingly fast. 
   *
@@ -114,12 +116,10 @@ import javax.imageio.*;    // PNG, JPEG
   * Bug: BasicStroke has spiky JOIN_BEVELs.     <<fixed: JOIN_ROUNDs 
   *
   *
-  * (c) 2004 Stellar Software all rights reserved. 
+  * (c) 2004 - 2015 Stellar Software all rights reserved. 
   */
 abstract class GPanel extends JPanel implements B4constants, Printable
 {
-    // public static final long serialVersionUID = 42L;
-
     //-----Each extension must supply values for the following---------
 
     protected GJIF  myGJIF;                  // set by descendant panel
@@ -134,29 +134,37 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     protected double uxanchor = 0.0;         // set by mouse
     protected double uyanchor = 0.0;         // set by mouse
     protected double uzanchor = 0.0;         // unused.
-    protected double dUOpixels = 500.0;
+    protected double dUOpixels = 500.0;      // window pixel size set by User Options
     protected int    iEdits;                 // to compare with DMF.nEdits
     
     //---Abstract "do" methods; each extension must implement these-----
-    //-------protected scope is safest---------------------
     
     abstract void    doTechList(boolean bArtStatus); 
     abstract void    doRotate(int i, int j);
     abstract boolean doRandomRay(); 
-    abstract void    doFinishArt(); 
     abstract void    doCursor(int i, int j); 
     abstract double  getStereo(); 
     abstract void    doSaveData(); 
     
-    //-----------------Constructor------------------
+    //----QuadLists available internally for assembling artwork----------------
+    //---client users will call these using QBASE, QBATCH etc------------------
+    
+    private ArrayList<XYZO> baseList;    // vector art for Tech drawing
+    private ArrayList<XYZO> batchList;   // vector art for random batch
+    private ArrayList<XYZO> randList;    // vector art for accumulated random rays
+    private ArrayList<XYZO> finishList;  // vector art finishing Layouts
+    private ArrayList<XYZO> annoList;    // vector art for annotation
+    
+    //--------Constructor---------------------
 
-    public GPanel()  // pixels are init by extensions
+    public GPanel()  // host class for artwork generators
     {
-        myTechList = new ArrayList<XYZO>(); 
-        myAnnoList = new ArrayList<XYZO>(); 
-        myBatchList = new ArrayList<XYZO>(); 
-        myRandList = new ArrayList<XYZO>(); 
-
+        baseList   = new ArrayList<XYZO>(); 
+        batchList  = new ArrayList<XYZO>(); 
+        randList   = new ArrayList<XYZO>(); 
+        finishList = new ArrayList<XYZO>();
+        annoList   = new ArrayList<XYZO>(); 
+        
         this.setFocusable(true);                   
         this.addKeyListener(new MyKeyHandler());
         this.addMouseListener(new MyMouseHandler());
@@ -171,14 +179,15 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     // Don't re-parse UO or sizes when this is called.
     // Just let drawPage() regenerate its new g2Tech and render it. 
     {
-        bArtStatus = true; // local stash for when OS paints.
-        myAnnoList.clear();
+        bArtStatus = true;  // local stash for when OS paints.
+        annoList.clear();
         if (g2Tech != null)
           g2Tech.dispose(); 
-        g2Tech = null;   
-        repaint();         // call OS, which calls paintComponent() below.
+        g2Tech = null;      // should not spoil baseList
+        repaint();          // call OS, which calls paintComponent() below.
     }
-
+    
+    
     public void paintComponent(Graphics g)
     // Gets called when OS requests repaint() each caret blink.
     // GJIF offers myGJIF.setTitle(), myGJIF.getTitle().
@@ -191,11 +200,11 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
 
     public void redo()
-    // Called by Random after random rays have augmented myBatchList.
+    // Called by Random after random rays have augmented batchList.
     // For Layout and Plot, rays atop earlier artwork, bClobber=false:
-    //   First it appends myBatchList to myRandList, retain for CAD/printing. 
-    //   Then we render myBatchList onto biTech using g2Tech.
-    //   Then clears myBatchList making room for more random rays. 
+    //   First it appends batchList to randList, retain for CAD/printing. 
+    //   Then we render batchList onto biTech using g2Tech.
+    //   Then clears batchList making room for more random rays. 
     //   Then requests a repaint() to blit biTech onto the screen. 
     // For H1D, H2D, MTF, Map, a total redraw is necessary, bClobber=true:
     //   Accomplished by nulling g2Tech while retaining biTech:
@@ -204,46 +213,34 @@ abstract class GPanel extends JPanel implements B4constants, Printable
         if (g2Tech == null)  // SNH.
           return; 
         
-        int lRand = myRandList.size();
-        int lBatch = myBatchList.size(); 
+        int lRand = randList.size();
+        int lBatch = batchList.size(); 
+        // System.out.println("GPanel:redo() starting: nrand, nbatch = "+lRand+"  "+lBatch); 
 
         boolean bTooBig = (lRand + lBatch > MAXRANDQUADS); 
         if (!bTooBig)
           for (int i=0; i<lBatch; i++)
-            myRandList.add(myBatchList.get(i)); 
+            randList.add(batchList.get(i)); 
         double dStereo = getStereo(); 
         
         if (bClobber)
-          g2Tech = null;  // let drawPage() create fresh artwork
+          g2Tech = null;  // let drawPage() create fresh artwork. But what about biTech?
         else
         {
-            renderList(myBatchList, g2Tech, dStereo, true);
+            renderList(batchList, g2Tech, dStereo, true);
             if (dStereo != 0.0)
-              renderList(myBatchList, g2Tech, -dStereo, false); 
+              renderList(batchList, g2Tech, -dStereo, false); 
         }
-        myBatchList.clear(); // done with myBatchList.
+        batchList.clear(); // all done with batchList.
+        
+        //--finally superpose finishList if any----
+        
+        renderList(finishList, g2Tech, dStereo, true); 
+        if (dStereo != 0.0)
+          renderList(finishList, g2Tech, -dStereo, false); 
 
         repaint(); 
     }
-
-
-    public void doFinish()
-    // Called at completion of random ray run.
-    // Allows overlay at completion of random ray run.
-    // Employed only by Layout's foreground monoscopic artwork.
-    // All other clients ignore doFinishArt() requests. 
-    {
-        if (g2Tech == null)  // SNH.
-          return; 
-        double dStereo = getStereo(); 
-        if (dStereo != 0.0)
-          return;            // cannot overwrite in stereo. 
-        myTechList.clear();  // prepare for cleanup artwork
-        doFinishArt();       // get cleanup artwork from client panel. 
-        renderList(myTechList, g2Tech, 0.0, true);
-        repaint();
-    }
-
 
     public int print(Graphics g, PageFormat pf, int page) throws PrinterException
     {
@@ -276,7 +273,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
            return; 
         }
         boolean bPortrait = "T".equals(DMF.reg.getuo(UO_CAD, 10)); 
-        CAD.doCAD(style, bPortrait, myTechList, myRandList, myAnnoList); 
+        CAD.doCAD(style, bPortrait, baseList, randList, finishList, annoList); 
     }
     
 
@@ -285,7 +282,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     {
         bPleaseParseUO = true; // flag allows client doParse().
         bArtStatus = bFULLART; // stash for when OS paints
-        myAnnoList.clear();    // discard old artwork
+        annoList.clear();      // discard old artwork
         if (g2Tech != null)    // discard old artwork
           g2Tech.dispose();    // discard old artwork
         g2Tech = null;         // discard old artwork
@@ -302,24 +299,63 @@ abstract class GPanel extends JPanel implements B4constants, Printable
         iEdits = DMF.nEdits;   // update local edits count
         // bPleaseParseUO = true; // flag allows client doParse().
         bArtStatus = bFULLART; // stash for when OS paints
-        myAnnoList.clear();    // discard old artwork
+        annoList.clear();    // discard old artwork
         if (g2Tech != null)    // discard old artwork
           g2Tech.dispose();    // discard old artwork
         g2Tech = null;         // discard old artwork
         repaint();             // request OS repaint.
     }
 
-    //----------------protected methods---------------------
+    //---------protected methods for client use-----------
 
-    protected int getTechListSize()
+    protected void clearList(int which)
     {
-        if (myTechList == null)
-          return 0; 
-        else
-          return myTechList.size();
+        switch(which)
+        {
+            case QBASE:   baseList.clear(); break; 
+            case QBATCH:  batchList.clear(); break; 
+            case QRAND:   randList.clear(); break; 
+            case QFINISH: finishList.clear(); break; 
+            case QANNO:   annoList.clear(); break; 
+        }
+    }
+            
+    protected void addRaw(double x, double y, double z, int op, int which)
+    // unscaled; for linewidths, font sizes, colors....
+    {
+        XYZO quad = new XYZO(x, y, z, op); 
+        switch(which)
+        {
+            case QBASE:   baseList.add(quad); break; 
+            case QBATCH:  batchList.add(quad); break; 
+            case QRAND:   randList.add(quad); break; 
+            case QFINISH: finishList.add(quad); break; 
+            case QANNO:   annoList.add(quad); break; 
+        }        
+    }
+    
+    protected void addScaled(double xyz[], int op, int which)
+    // scaled by the getXX() functions converting user to screen coordinates. 
+    {
+        XYZO quad = new XYZO(getax(xyz[0]), getay(xyz[1]), getaz(xyz[2]), op); 
+        switch(which)
+        {
+            case QBASE:   baseList.add(quad); break; 
+            case QBATCH:  batchList.add(quad); break; 
+            case QRAND:   randList.add(quad); break; 
+            case QFINISH: finishList.add(quad); break; 
+            case QANNO:   annoList.add(quad); break; 
+        }            
+    }
+    
+    protected void addScaled(double x, double y, double z, int op, int which)
+    // as above but with explicit coordinates
+    {
+        double xyz[] = {x, y, z}; 
+        addScaled(xyz, op, which); 
     }
 
-
+    
 
     //--------------private & client support area-----------
     //--------------private & client support area-----------
@@ -328,11 +364,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
     //------------graphics and blitting-----------------
 
-    private ArrayList<XYZO> myTechList;    // vector art for Tech drawing
-    private ArrayList<XYZO> myAnnoList;    // vector art for annotation
-    private ArrayList<XYZO> myBatchList;   // vector art for random batch
-    private ArrayList<XYZO> myRandList;    // vector art for accum randoms
-    private Graphics2D g2Tech;       // Graphics2D for Tech drawing
+    private Graphics2D g2Tech;       // Graphics2D for local Tech drawing
     private BufferedImage biTech;    // unannotated bitmap
     private Dimension dim;           // current panel size  
     private int prevwidth=0;         // display size
@@ -340,8 +372,6 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     private double dStereo=0.0;      // display stereo convergence
 
     
-
-
 
     private void drawPage(Graphics2D g2)
     // This routine does all the blitting: blinker, anno, biTech.
@@ -361,17 +391,21 @@ abstract class GPanel extends JPanel implements B4constants, Printable
         imid = dim.width / 2; 
         jmid = dim.height / 2; 
 
+        //----totally new artwork---------
+        
         if ((prevwidth != dim.width) || (prevheight != dim.height)
         || (biTech==null) || (g2Tech==null))
         {
             if (g2Tech != null)
               g2Tech.dispose(); 
 
-            myTechList.clear();  
-            myRandList.clear(); 
-            myAnnoList.clear(); 
-            myBatchList.clear(); 
+            baseList.clear();  
+            batchList.clear(); 
+            randList.clear(); 
+            finishList.clear(); 
+            annoList.clear(); 
 
+            // System.out.println("GPanel:drawPage() baseList.clear(), size = "+baseList.size());  
             prevwidth = dim.width; 
             prevheight = dim.height; 
             biTech = new BufferedImage(dim.width, dim.height,
@@ -380,19 +414,27 @@ abstract class GPanel extends JPanel implements B4constants, Printable
             setGraphicSmoothing(g2Tech);
 
             doTechList(bArtStatus); // locally stashed bArtStatus 
-            
+            // System.out.println("GPanel:drawPage() doTechList() call, now size = "+baseList.size());              
             double dStereo = getStereo(); 
             
             if (dStereo == 0.0)
-              renderList(myTechList, g2Tech, 0.0, true);
+            {
+                renderList(baseList, g2Tech, 0.0, true);
+                renderList(finishList, g2Tech, 0.0, true); 
+            }
             else
-              renderListTwice(myTechList, biTech, dStereo, true);  
+            {
+                renderListTwice(baseList, biTech, dStereo, true);  
+                renderListTwice(finishList, biTech, dStereo, true); 
+            }
         }
 
+        //----all artwork------------
+        
         setGraphicSmoothing(g2);                    // prep screen
         g2.drawImage(biTech, 0, 0, null);           // blit biTech
-        if (myAnnoList.size() > 0)
-          renderList(myAnnoList, g2, 0.0, false);   // annotate
+        if (annoList.size() > 0)
+          renderList(annoList, g2, 0.0, false);     // annotate
 
         if ((myGJIF != null) && myGJIF.getCaretStatus())    
         {
@@ -473,7 +515,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     }
 
 
-   //----------helpers for this AnnoPanel doing annotation----------
+   //----------helpers for this GPanel drawPage() doing annotation----------
 
     private int getUOAnnoFont()
     {
@@ -498,14 +540,12 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     }
 
 
-
-    //------helpers for client assembling its techList-----------
+    //------helpers for client assembling its quadList-----------
 
     protected int getUOGraphicsFont()
     {
         return U.parseInt(DMF.reg.getuo(UO_GRAPH, 2)); 
     }
-
 
     protected int getUOGraphicsBold()
     // as of Nov 2005, Font.BOLD=1, Font.PLAIN=0
@@ -513,133 +553,19 @@ abstract class GPanel extends JPanel implements B4constants, Printable
        return "T".equals(DMF.reg.getuo(UO_GRAPH, 3)) ? Font.BOLD : Font.PLAIN;
     }
 
-
     protected int getUOGraphicsFontCode()  // adds to ASCII
     {
         return 10000*getUOGraphicsFont() + 1000*getUOGraphicsBold(); 
     }
-     
   
-    protected void addXYZO(double x, double y, double z, int k)  
-    // For use by any extension.
-    {
-        myTechList.add(new XYZO(x, y, z, k)); 
-    }
-
-
-    protected void addXYZO(int i, int j, int op)  
-    // For use by each extension; i & j are in pixels. 
-    {
-        myTechList.add(new XYZO(i, j, op)); 
-    }
-
-
-    protected void addXYZO(int i, int j, char c)
-    {
-        myTechList.add(new XYZO(i, j, c));
-    }
-
-
-    protected void addXYZO(int op)
-    {
-        myTechList.add(new XYZO(op)); 
-    }
-    
-    protected void addXYZO(double x, int op)
-    // For use in Layout to implement custom line widths.
-    // x is the user-specified line width in points or pixels. 
-    {
-        myTechList.add(new XYZO(x, 0.0, 0.0, op));
-    }
-
-
-    protected void clearXYZO()
-    // For use by extension for each fresh start.
-    // But myTechList is not destroyed: still there for receiving artwork.
-    // Also biTech remains painted, and g2Tech interface is available.
-    {
-        myTechList.clear(); 
-    }
 
 
     protected void addAffines()
     // stash user affine consts & slopes for DXF: pix->UserUnits
     {
-        addXYZO(uxcenter, uycenter, uzcenter, USERCONSTS); 
+        baseList.add(new XYZO(uxcenter, uycenter, uzcenter, USERCONSTS)); 
         double d = (dUOpixels > 0) ? dUOpixels : 500.0; 
-        addXYZO(uxspan/d, uyspan/d, uzspan/d, USERSLOPES);
-    }
-
-
-    protected void addScaledItem(double ux, double uy, int op)
-    // scales user (x,y) and appends to myTechList.
-    // allows pan zoom twirl thanks to getXX() calls
-    // Be sure to addAffines() before using this!
-    {
-        addXYZO(getax(ux), getay(uy), 0.0, op);
-    }
-
-
-    protected void addScaledItem(double ux, double uy, double z, int op)
-    {
-        addXYZO(getax(ux), getay(uy), z, op);
-    }
-
-
-    protected void addScaledItem(double[] xyz, int op)
-    // allows pan zoom twirl thanks to getXX() calls
-    {
-        addXYZO(getax(xyz[0]), getay(xyz[1]), getaz(xyz[2]), op); 
-    }
-
-
-    //----the following helpers are for random ray batch artwork--------
-
-    protected void buildXYZO(int opcode, boolean bRand)
-    {
-        if (bRand)
-          myBatchList.add(new XYZO(opcode)); 
-        else
-          myTechList.add(new XYZO(opcode));
-    }
-    
-    
-    protected void buildXYZO(double x, int opcode, boolean bRand)
-    {
-        if (bRand)
-          myBatchList.add(new XYZO(x, 0.0, 0.0, opcode)); 
-        else
-          myTechList.add(new XYZO(x, 0.0, 0.0, opcode));
-    }
-
-
-    protected void buildScaledItem(double[] xyz, int k, boolean bRand)
-    {
-        double x = getax(xyz[0]); 
-        double y = getay(xyz[1]); 
-        double z = getaz(xyz[2]); 
-        if (bRand)
-          myBatchList.add(new XYZO(x, y, z, k)); 
-        else
-          myTechList.add(new XYZO(x, y, z, k)); 
-    }
-
-
-    protected void buildScaledItem(double x, double y, double z, int k, boolean bRand)
-    {
-        x = getax(x); 
-        y = getay(y); 
-        z = getaz(z); 
-        if (bRand)
-          myBatchList.add(new XYZO(x, y, z, k)); 
-        else
-          myTechList.add(new XYZO(x, y, z, k)); 
-    }
-
-
-    protected void buildScaledItem(double x, double y, int k, boolean bRand)
-    {
-        buildScaledItem(x, y, 0.0, k, bRand);
+        baseList.add(new XYZO(uxspan/d, uyspan/d, uzspan/d, USERSLOPES));
     }
 
 
@@ -647,14 +573,16 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     //---------these helpers are general purpose--------------
 
     protected double getax(double ux)
-    // converts userX to annoX
+    // converts userX to graphic coords: mouse drag, zoom, etc
+    // Used by addScaledItem() here and in client code
     {
         return dUOpixels*(ux-uxcenter)/uxspan; 
     }
 
 
     protected double getay(double uy)
-    // converts userY to annoY
+    // converts userY to graphic y; mouse drag, zoom, etc
+    // Used by addScaledItem() here and in client code
     {
         return dUOpixels*(uy-uycenter)/uyspan; 
     }
@@ -662,6 +590,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
     protected double getaz(double uz)
     // zero offset, and shares scale factor with yaxis.
+    // No mouse drag or zoom in addScaledItem. 
     {
         return dUOpixels*uz/uyspan; 
     }
@@ -739,10 +668,10 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
     char getCurrentChar()
     {
-        int len = myAnnoList.size(); 
+        int len = annoList.size(); 
         if (len > 0)
         {
-            int k = myAnnoList.get(len-1).getO(); 
+            int k = annoList.get(len-1).getO(); 
             if (k<=127)
               return (char) k; 
         }
@@ -754,15 +683,15 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     // Can I eliminate this entirely??
     // and then eliminate getIYPIX().. etc?  Nope.
     {
-        int len = myAnnoList.size(); 
+        int len = annoList.size(); 
         if (len > 0)
         {
-            icaret = igiven + getIXPIX(myAnnoList.get(len-1).getI()); 
-            jcaret = getIYPIX(myAnnoList.get(len-1).getJ()); 
+            icaret = igiven + getIXPIX(annoList.get(len-1).getI()); 
+            jcaret = getIYPIX(annoList.get(len-1).getJ()); 
             return; 
         }
 
-        // treat case of empty myAnnoList length....
+        // treat case of empty annoList length....
         icaret = imouse; 
         jcaret = jmouse; 
     }
@@ -771,26 +700,26 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     void addAnno(double x, double y, char c)
     {
         int i = (int) c + getUOAnnoFontCode(); 
-        myAnnoList.add(new XYZO(x, y, 0.0, i));
+        annoList.add(new XYZO(x, y, 0.0, i));
     }
 
 
     void deleteLastAnno()  // for backspace.
     {
-        int i = myAnnoList.size(); 
+        int i = annoList.size(); 
         if (i>0)
-          myAnnoList.remove(myAnnoList.get(i-1)); 
+          annoList.remove(annoList.get(i-1)); 
     }
 
 
     private double getUserSlope()  // ZoomIn limiter
     {
-        if (myTechList==null)
+        if (baseList==null)
           return 1.0; 
-        int reach = Math.min(myTechList.size(), 5); 
+        int reach = Math.min(baseList.size(), 5); 
         for (int i=0; i<reach; i++)
         {
-            XYZO myXYZO = myTechList.get(i); 
+            XYZO myXYZO = baseList.get(i); 
             if (myXYZO.getO() == USERSLOPES)
               return myXYZO.getX(); 
         }
@@ -811,7 +740,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     // bFinal=true when mouse is released and final artwork is wanted.
     {
         bArtStatus = bFinal; // local stash for when OS paints.
-        myAnnoList.clear();
+        annoList.clear();
         if (g2Tech != null)
           g2Tech.dispose(); 
         g2Tech = null;   
@@ -909,15 +838,15 @@ abstract class GPanel extends JPanel implements B4constants, Printable
         double zzz=0;             // sum & average zvertex
         double xs=1, ys=1;        // slopes: userUnits/point
         int ncount = 0; 
-        if (myTechList == null)
+        if (baseList == null)
           return; 
-        int npts = Math.min(1000, myTechList.size()); 
+        int npts = Math.min(1000, baseList.size()); 
         if (npts < 1)
           return; 
 
         for (int k=0; k<npts; k++)
         {
-            XYZO m = myTechList.get(k); 
+            XYZO m = baseList.get(k); 
             int op = m.getO(); 
             double x = m.getX();
             double y = m.getY(); 
@@ -1064,7 +993,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
             int charH = fontcode / 10000;  
             int charW = 1 + fontcode / 20000;   
 
-            if (myAnnoList.size() < 1)      // startup.
+            if (annoList.size() < 1)      // startup.
             {
                int foreground = SETCOLOR + BLACK; 
                if (g2Tech != null)
@@ -1283,10 +1212,10 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
 
     private void renderList(ArrayList<XYZO> aList, Graphics2D gX, 
-         double dStereo, boolean bPreClear)
+                            double dStereo, boolean bPreClear)
     // Renders a given List onto a given Graphics2D.
-    // Called by redo(), doFinish(), doCAD(), and drawPage(). 
-    // Renders g2Tech and gAnno.  (Also caret blinks: see line 70). 
+    // Called by redo(), doCAD(), and drawPage(). 
+    // Renders g2Tech and gAnno. 
     // So use an EXPLICIT clearRect() at start of g2Tech.
     // A clearRect() here would have gAnno obliterate g2Tech,
     //   if gAnno contained a SETXXXBKG as its initial element. 
@@ -1295,7 +1224,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
     {
         final double DECISIONRADIUS = 100000.0;
 
-        if ((aList==null) || (gX==null))
+        if ((aList==null) || (gX==null) || (aList.size()<1))
           return; 
 
         int fontcodeprev=0;

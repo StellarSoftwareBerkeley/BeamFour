@@ -14,7 +14,7 @@ import java.awt.*;   // Color
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 169, 13 Mar 2015";
+    static final String  RELEASE    = "Release 173, 30 Mar 2015";
     // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
     static final String  COMPILER   = "Compiler: Javac 1.8.0_20";
     static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 
@@ -591,19 +591,21 @@ interface B4constants
     static final int COMMENTRULER      = 226;
     static final int COMMENTDATA       = 227;
     static final int COMMENTANNO       = 228;
+    static final int COMMENTFINISH     = 229; 
 
 
-    /*------------------ quadlist index macrodefs -----------------
-    static final int QX  = 0; 
-    static final int QY  = 1; 
-    static final int QZ  = 2; 
-    static final int QOP = 3; 
-
-    /*------------ triplist definitions------------------------*/
+    //------------------ quadlist index macrodefs -----------------
+    static final int QBASE   = 0; 
+    static final int QBATCH  = 1; 
+    static final int QRAND   = 2; 
+    static final int QFINISH = 3; 
+    static final int QANNO   = 4; 
+    
+    //------------ triplist definitions---------------------
     static final int MAXTRIPS = 10000; // max triplet, units=twips.
 
 
-    /*----------------special colors---------------------------*/
+    //----------------special colors-------------------------
     static final Color LGRAY = new Color(192, 192, 192); 
     static final Color DGRAY = new Color(155, 155, 155); 
     static final Color LBLUE = new Color(192, 192, 255); 

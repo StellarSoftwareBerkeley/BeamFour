@@ -60,7 +60,7 @@ public class Plot3Panel extends GPanel
         bPleaseParseUO = true; // protected; from GPanel. 
         nprev = 0;             // private, triggers parse
         CADstyle = 0;  
-        uxcenter = 0.0;        // Unit cube
+        uxcenter = 0.0;        // Unit cube can be installed by addAffines()
         uxspan = EXTRAROOMA;   // Unit cube
         uycenter = 0.0;        // Unit cube
         uyspan = EXTRAROOMB;   // Unit cube
@@ -123,13 +123,9 @@ public class Plot3Panel extends GPanel
 
     protected boolean doRandomRay() // replaces abstract "do" method
     {
-        return drawOneRay(0, true); 
+        return drawOneRay(0, QBATCH); 
     }
-
-    protected void doFinishArt() // replaces abstract "do" method
-    {
-        return; 
-    }
+    
     
     protected void doCursor(int ix, int iy)
     // delivers current cursor coordinates
@@ -194,8 +190,6 @@ public class Plot3Panel extends GPanel
 
         return ""; 
     }
-
-
 
 
     private void doParseSizes()
@@ -287,26 +281,48 @@ public class Plot3Panel extends GPanel
 
 
 
+
+
+
+
+
+    //-------ARTWORK---------------
+    //-------ARTWORK---------------
+    //-------ARTWORK---------------
+    
+
+    private void addView(double x, double y, double z, int op, int which)
+    {
+        double xyz[] = {x, y, z};     
+        addView(xyz, op, which); 
+    }
+    
+    private void addView(double xyz[], int op, int which)
+    {
+        viewelaz(xyz); 
+        addScaled(xyz, op, which);
+    }
+    
+
+    
     private void doArt() 
     // Called only by doTechList(). 
     {
         iSymbol = DOT; 
         if ("T".equals(DMF.reg.getuo(UO_PLOT3, 10)))
-          iSymbol = PLUS; 
+          iSymbol = PLUS;
         if ("T".equals(DMF.reg.getuo(UO_PLOT3, 11)))
           iSymbol = SQUARE; 
         if ("T".equals(DMF.reg.getuo(UO_PLOT3, 12)))
           iSymbol = DIAMOND; 
-
-        clearXYZO();  
-
         whitebkg = "T".equals(DMF.reg.getuo(UO_PLOT3, 15));
-        addXYZO(whitebkg ? SETWHITEBKG : SETBLACKBKG); 
-        addXYZO(SETCOLOR + (whitebkg ? BLACK : WHITE)); 
-
-        addXYZO(COMMENTRULER); 
-        addXYZO(1.0, SETSOLIDLINE);
-
+        
+        clearList(QBASE); 
+        addRaw(0., 0., 0., whitebkg ? SETWHITEBKG : SETBLACKBKG, QBASE); 
+        addRaw(0., 0., 0., SETCOLOR + (whitebkg ? BLACK : WHITE), QBASE); 
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
+        addRaw(0., 0., 0., COMMENTRULER, QBASE); 
+        
         drawAruler(); 
         drawBruler(); 
         drawCruler();
@@ -315,13 +331,14 @@ public class Plot3Panel extends GPanel
         jOther = 0; 
 
         // finally.... draw the ray hits. 
-        addXYZO(1.0, SETSOLIDLINE);    
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
+        addRaw(0., 0., 0., COMMENTRAY, QBASE); 
         for (int k=1; k<=nrays; k++)
-          drawOneRay(k, false); 
+          drawOneRay(k, QBASE); 
     }
 
 
-    private boolean drawOneRay(int kray, boolean bRand)
+    private boolean drawOneRay(int kray, int which)
     // Called both by RandomRay and TableRay.
     // Relies upon iSymbol, jOther, asurf, bsurf...set up in doArt().
     {
@@ -359,7 +376,7 @@ public class Plot3Panel extends GPanel
             xyz[0] = (aa-amid)/aspan;  // unit cube
             xyz[1] = (bb-bmid)/bspan;  // unit cube
             xyz[2] = (cc-cmid)/cspan;  // unit cube
-            buildViewedItem(xyz, iSymbol+icolor, bRand); 
+            addView(xyz, iSymbol+icolor, which); 
             if ((jOther > 0) && (asurf == bsurf) && (asurf == csurf))
             {
                 aa = RT13.dGetRay(kray, jOther, aattr); 
@@ -368,7 +385,7 @@ public class Plot3Panel extends GPanel
                 xyz[0] = (aa-amid)/aspan;  // unit cube
                 xyz[1] = (bb-bmid)/bspan;  // unit cube
                 xyz[2] = (cc-cmid)/cspan;  // unit cube
-                buildViewedItem(xyz, iSymbol+icolor, bRand); 
+                addView(xyz, iSymbol+icolor, which); 
             }
             return true; 
         }
@@ -376,12 +393,10 @@ public class Plot3Panel extends GPanel
     } 
 
 
-
-
     private void drawAruler()
     {
-        addViewedItem(-0.5, -0.5, -0.5, MOVETO); 
-        addViewedItem(+0.5, -0.5, -0.5, STROKE); 
+        addView(-0.5, -0.5, -0.5, MOVETO, QBASE); 
+        addView(+0.5, -0.5, -0.5, STROKE, QBASE); 
 
         double ticks[] = new double[10]; 
         int results[] = new int[2]; 
@@ -393,8 +408,8 @@ public class Plot3Panel extends GPanel
         for (int i=0; i<nticks; i++)
         {
             double fract = (ticks[i]-amid)/aspan; 
-            addViewedItem(fract, -0.5, -0.5, MOVETO); 
-            addViewedItem(fract, -0.5+dperp, -0.5, STROKE); 
+            addView(fract, -0.5, -0.5, MOVETO, QBASE); 
+            addView(fract, -0.5+dperp, -0.5, STROKE, QBASE); 
             String s = U.gd(ticks[i]); 
             addViewedString(fract, -0.5-2*dperp, -0.5, s); 
         }
@@ -404,8 +419,8 @@ public class Plot3Panel extends GPanel
 
     private void drawBruler()
     {
-        addViewedItem(-0.5, -0.5, -0.5, MOVETO); 
-        addViewedItem(-0.5, +0.5, -0.5, STROKE); 
+        addView(-0.5, -0.5, -0.5, MOVETO, QBASE); 
+        addView(-0.5, +0.5, -0.5, STROKE, QBASE); 
 
         double ticks[] = new double[10]; 
         int results[] = new int[2]; 
@@ -417,8 +432,8 @@ public class Plot3Panel extends GPanel
         for (int i=0; i<nticks; i++)
         {
             double fract = (ticks[i]-bmid)/bspan; 
-            addViewedItem(-0.5, fract, -0.5, MOVETO); 
-            addViewedItem(-0.5+dperp, fract, -0.5, STROKE); 
+            addView(-0.5, fract, -0.5, MOVETO, QBASE); 
+            addView(-0.5+dperp, fract, -0.5, STROKE, QBASE); 
             String s = U.gd(ticks[i]);
             addViewedString(-0.5-2*dperp, fract, -0.5, s); 
         }
@@ -428,8 +443,8 @@ public class Plot3Panel extends GPanel
 
     private void drawCruler()
     {
-        addViewedItem(-0.5, -0.5, -0.5, MOVETO); 
-        addViewedItem(-0.5, -0.5, +0.5, STROKE); 
+        addView(-0.5, -0.5, -0.5, MOVETO, QBASE); 
+        addView(-0.5, -0.5, +0.5, STROKE, QBASE); 
 
         double ticks[] = new double[10]; 
         int results[] = new int[2]; 
@@ -441,8 +456,8 @@ public class Plot3Panel extends GPanel
         for (int i=0; i<nticks; i++)
         {
             double fract = (ticks[i]-cmid)/cspan; 
-            addViewedItem(-0.5, -0.5, fract, MOVETO); 
-            addViewedItem(-0.5, -0.5+dperp, fract, STROKE); 
+            addView(-0.5, -0.5, fract, MOVETO, QBASE); 
+            addView(-0.5, -0.5+dperp, fract, STROKE, QBASE); 
             String s = U.gd(ticks[i]);
             addViewedString(-0.5, -0.5-2*dperp, fract, s); 
         }
@@ -451,34 +466,8 @@ public class Plot3Panel extends GPanel
 
 
 
-
-
-
-
-
     //--------3D artwork low level methods--------------------------
 
-    void buildViewedItem(double xyz[], int op, boolean b)
-    // applies local viewing angles to an xyz random object
-    // then calls GPanel to scale for zoom & pan.
-    {
-        viewelaz(xyz); 
-        buildScaledItem(xyz, op, b);
-    }
-
-    void addViewedItem(double[] xyz, int op)
-    // applies local viewing angles to an xyz item
-    // then calls GPanel to scale for zoom & pan.
-    {
-        viewelaz(xyz); 
-        addScaledItem(xyz, op); 
-    }
-
-    void addViewedItem(double x, double y, double z, int op)
-    {
-        double xyz[] = {x, y, z}; 
-        addViewedItem(xyz, op);
-    }
 
     void viewelaz(double[] xyz)
     // Puts a labframe point xyz into user's el, az viewframe
@@ -515,7 +504,7 @@ public class Plot3Panel extends GPanel
         {
              int ic = (int) s.charAt(k) + getUOGraphicsFontCode(); 
              xyz[0] += scaledWidth; 
-             addScaledItem(xyz, ic); 
+             addScaled(xyz, ic, QBASE); 
         }
     }
 
@@ -541,7 +530,7 @@ public class Plot3Panel extends GPanel
         {
              int ic = (int) s.charAt(k) + getUOGraphicsFontCode(); 
              xyz[0] += scaledWidth; 
-             addScaledItem(xyz, ic); 
+             addScaled(xyz, ic, QBASE); 
         }
     }
 

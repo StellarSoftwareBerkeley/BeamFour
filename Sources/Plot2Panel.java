@@ -16,7 +16,9 @@ import javax.swing.*;      // Graphics2D features
   * Not yet implemented: manual scaling; diam scaling. 
   * Does caret shut down when focus is lost?
   *
-  * @author M.Lampton (c) STELLAR SOFTWARE 2004 all rights reserved.
+  * Adopting explicit QBASE methods.
+  *
+  * @author M.Lampton (c) STELLAR SOFTWARE 2004-2015 all rights reserved.
   */
 public class Plot2Panel extends GPanel
 {
@@ -89,24 +91,15 @@ public class Plot2Panel extends GPanel
         doArt();              // finally... do the artwork.
     }
 
-
     protected void doRotate(int i, int j) // replaces abstract "do" method
     {
         return; 
     }
 
-
     protected boolean doRandomRay() // replaces abstract "do" method
     {
         return drawOneRandomRay(); 
     }
-
-
-    protected void doFinishArt() // replaces abstract "do" method
-    {
-        return; 
-    }
-
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
     // Given mouse cursor coordinates in pixels, 
@@ -249,11 +242,29 @@ public class Plot2Panel extends GPanel
             uxspan = 1; 
             uyspan = 1; 
         }
-
     } //---------end of doParseSizes()-----------
 
 
 
+
+
+
+
+    //----------ARTWORK------------------------
+    //----------ARTWORK------------------------
+    //----------ARTWORK------------------------
+    
+/*********    
+    private void add2Dbase(double ux, double uy, int op)
+    {
+        addScaled(ux, uy, 0.0, op, QBASE);  // GPanel service
+    }
+
+    private void add2Dbatch(double ux, double uy, int op) 
+    {
+        addScaled(ux, uy, 0.0, op, QBATCH);  // GPanel service
+    }
+*********/
 
     private void doArt()  
     {
@@ -265,21 +276,17 @@ public class Plot2Panel extends GPanel
           iSymbol = SQUARE; 
         if ("T".equals(DMF.reg.getuo(UO_PLOT2, 8)))
           iSymbol = DIAMOND; 
-
-        clearXYZO();       
-        addXYZO(blackbkg ? SETBLACKBKG : SETWHITEBKG);
-        addXYZO(SETCOLOR + (blackbkg ? WHITE : BLACK)); 
-
+        
+        //---start the drawing, explicit new way----------
+        
+        clearList(QBASE);  
+        addRaw(0., 0., 0., blackbkg ? SETBLACKBKG : SETWHITEBKG, QBASE);
+        addRaw(0., 0., 0., SETCOLOR+(blackbkg ? WHITE : BLACK), QBASE); 
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
+        
         // Need ternary decision: auto,diam,manual.
         // Here is auto mode....
         // NEED THOROUGH PROTECTION AGAINST ZERO DENOMINATORS HERE...
-
-
-        ///////////// draw the furniture.  //////////
-
-        addXYZO(1.0, SETSOLIDLINE);     // for rulers
-        addXYZO(COMMENTRULER);          // advertise the H ruler
-        addXYZO(SETCOLOR + (blackbkg ? WHITE : BLACK)); 
 
         double xruler = uxcenter - 0.33*uxspan;
         double yruler = uycenter - 0.33*uyspan;  
@@ -307,15 +314,15 @@ public class Plot2Panel extends GPanel
         U.ruler(xruler, xruler+0.67*uxspan, false, ticks, results); 
         int nticks = results[NTICKS]; 
         int nfracdigits = results[NFRACDIGITS]; 
-        addScaledItem(ticks[0], yruler, MOVETO); 
-        addScaledItem(ticks[0], yruler+ytick, PATHTO); 
-        addScaledItem(ticks[0], yruler, PATHTO); 
+        addScaled(ticks[0], yruler, 0., MOVETO, QBASE); 
+        addScaled(ticks[0], yruler+ytick, 0., PATHTO, QBASE); 
+        addScaled(ticks[0], yruler, 0., PATHTO, QBASE); 
         for (int i=1; i<nticks; i++)
         {
-            addScaledItem(ticks[i], yruler, PATHTO); 
-            addScaledItem(ticks[i], yruler+ytick, PATHTO); 
+            addScaled(ticks[i], yruler, 0., PATHTO, QBASE); 
+            addScaled(ticks[i], yruler+ytick, 0., PATHTO, QBASE); 
             int op = (i < nticks-1) ? PATHTO : STROKE;  
-            addScaledItem(ticks[i], yruler, op); 
+            addScaled(ticks[i], yruler, 0., op, QBASE); 
         }
 
         // Label the ticks and don't let the labels overlap.
@@ -332,7 +339,7 @@ public class Plot2Panel extends GPanel
                 for (int k=0; k<s.length(); k++)
                 {
                     int ic = (int) s.charAt(k) + iFontcode; 
-                    addScaledItem(x, yruler+hyoffset, 0.0, ic);
+                    addScaled(x, yruler+hyoffset, 0., ic, QBASE);
                     x += scaledW;
                 }
             }
@@ -347,7 +354,7 @@ public class Plot2Panel extends GPanel
         {
             int ic = (int) t.charAt(k) + iFontcode; 
             double x = uxcenter + scaledW*(k-nchars/2); 
-            addScaledItem(x, yruler-2.5*scaledH, 0.0, ic);
+            addScaled(x, yruler-2.5*scaledH, 0., ic, QBASE);
         }
 
 
@@ -357,19 +364,19 @@ public class Plot2Panel extends GPanel
         // Fix: do Y axis first, shove xruler rightward if necessary.
         // Then do X axis using possibly shoved xruler. 
 
-        addXYZO(COMMENTRULER);  // the V ruler
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);  // the V ruler
         U.ruler(yruler, yruler+0.67*uyspan, false, ticks, results); 
         nticks = results[NTICKS]; 
         nfracdigits = results[NFRACDIGITS]; 
-        addScaledItem(xruler, ticks[0], MOVETO); 
-        addScaledItem(xruler+xtick, ticks[0], PATHTO); 
-        addScaledItem(xruler, ticks[0], PATHTO); 
+        addScaled(xruler, ticks[0], 0., MOVETO, QBASE); 
+        addScaled(xruler+xtick, ticks[0], 0., PATHTO, QBASE); 
+        addScaled(xruler, ticks[0], 0., PATHTO, QBASE); 
         for (int i=1; i<nticks; i++)
         {
-            addScaledItem(xruler, ticks[i],PATHTO); 
-            addScaledItem(xruler+xtick, ticks[i], PATHTO); 
+            addScaled(xruler, ticks[i], 0., PATHTO, QBASE); 
+            addScaled(xruler+xtick, ticks[i], 0., PATHTO, QBASE); 
             int op = (i < results[NTICKS]-1) ? PATHTO : STROKE;  
-            addScaledItem(xruler, ticks[i], op); 
+            addScaled(xruler, ticks[i], 0., op, QBASE); 
         }
 
         // labelling...
@@ -382,7 +389,7 @@ public class Plot2Panel extends GPanel
             {
                 int ic = (int) s.charAt(k) + iFontcode; 
                 double x = xruler + scaledW*(k-nchars-vrhgap); 
-                addScaledItem(x, ticks[i]+vyoffset, 0.0, ic);
+                addScaled(x, ticks[i]+vyoffset, 0., ic, QBASE);
             }
         }
 
@@ -398,7 +405,7 @@ public class Plot2Panel extends GPanel
         {
             int ic = (int) v.charAt(k) + iFontcode; 
             double x = xruler + (k-nchars-1)*scaledW; 
-            addScaledItem(x, y, 0.0, ic); 
+            addScaled(x, y, 0., ic, QBASE); 
         }
 
         jOtherSurface = getOther(nrays); 
@@ -433,13 +440,13 @@ public class Plot2Panel extends GPanel
 
             double xxx = RT13.dGetRay(kray, hsurf, hattr); 
             double yyy = RT13.dGetRay(kray, vsurf, vattr); 
-            buildScaledItem(xxx, yyy, iSymbol+icolor, false); // false=Table
+            addScaled(xxx, yyy, 0., iSymbol+icolor, QBASE);    
             if ((jOtherSurface > 0) && (hsurf == vsurf))
             {
                xxx = RT13.dGetRay(kray, jOtherSurface, hattr); 
                yyy = RT13.dGetRay(kray, jOtherSurface, vattr); 
                icolor = blackbkg ? WHITE : BLACK;
-               buildScaledItem(xxx, yyy, iSymbol+icolor, false); // false=Table
+               addScaled(xxx, yyy, 0., iSymbol+icolor, QBASE);  
             }
             return true; 
         }
@@ -473,13 +480,13 @@ public class Plot2Panel extends GPanel
 
             double xxx = RT13.dGetRay(0, hsurf, hattr); 
             double yyy = RT13.dGetRay(0, vsurf, vattr); 
-            buildScaledItem(xxx, yyy, iSymbol+icolor, true); // true=random
+            addScaled(xxx, yyy, 0., iSymbol+icolor, QBATCH);  
             if ((jOtherSurface > 0) && (hsurf == vsurf))
             {
                xxx = RT13.dGetRay(0, jOtherSurface, hattr); 
                yyy = RT13.dGetRay(0, jOtherSurface, vattr); 
                icolor = blackbkg ? WHITE : BLACK;
-               buildScaledItem(xxx, yyy, iSymbol+icolor, true); // true=random
+               addScaled(xxx, yyy, 0., iSymbol+icolor, QBATCH);  
             }
             return true; 
         }

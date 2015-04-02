@@ -2,6 +2,7 @@ package com.stellarsoftware.beam;
 
 import javax.swing.*;      // Graphics2D features
 import java.io.*;          // Save as file 
+import java.util.*;        // ArrayList
 
 @SuppressWarnings("serial")
 
@@ -52,7 +53,7 @@ public class H1DPanel extends GPanel
     private int hsurf, hattr; 
     private int prevGroups[] = new int[MAXSURFS+1]; // detect new groups
     
-    final double EXTRAROOM = 1.5;  // windowsize / plotbox
+    final double EXTRAROOM = 2.0;  // windowsize / plotbox
     final double EXTRASPAN = 1.5;  // plotwidth / datarange
     final double MINSPAN = 1E-8; 
     final int MAXBINS = 1025; 
@@ -143,12 +144,6 @@ public class H1DPanel extends GPanel
         }
         return false; 
     } 
-    
-    protected void doFinishArt()     // replaces abstract "do" method
-    {
-        return; 
-    }
-
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
     // delivers current cursor coordinates
@@ -353,9 +348,21 @@ public class H1DPanel extends GPanel
     } //---end doParse().
 
 
+
+
+
+
+
     //---------ARTWORK BEGINS HERE----------------
     //---------ARTWORK BEGINS HERE----------------
     //---------ARTWORK BEGINS HERE----------------
+    
+    private void add2D(double x, double y, int op)  // local shorthand
+    {
+        addScaled(x, y, 0.0, op, QBASE);  // GPanel service 
+    }
+    
+
 
     private void doArt()
     {
@@ -374,21 +381,22 @@ public class H1DPanel extends GPanel
         double vyoffset = 0.0;
         double vrhgap = -0.2;                       // CenterOrigin
 
-        //-----start the drawing---------
 
-        clearXYZO();                    // always clear quadlist
-        addXYZO(SETWHITEBKG);
-        addXYZO(SETCOLOR + BLACK); 
-        addXYZO(1.0, SETSOLIDLINE);     // for entire artwork
-        addXYZO(COMMENTRULER);          // advertise the H ruler
-
-        //-----draw a unit box------
-
-        addScaledItem(-0.5, -0.5, MOVETO); 
-        addScaledItem(+0.5, -0.5, PATHTO); 
-        addScaledItem(+0.5, +0.5, PATHTO); 
-        addScaledItem(-0.5, +0.5, PATHTO); 
-        addScaledItem(-0.5, -0.5, STROKE); 
+        //---start the drawing, explicit new way---------------
+        
+        clearList(QBASE);  
+        addRaw(0., 0., 0., SETWHITEBKG, QBASE);      // unscaled
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE);   // unscaled
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE);     // unscaled
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);     // unscaled
+        
+        //-----draw a scaled unit box------
+        
+        add2D(-0.5, -0.5, MOVETO); 
+        add2D(+0.5, -0.5, PATHTO); 
+        add2D(+0.5, +0.5, PATHTO); 
+        add2D(-0.5, +0.5, PATHTO); 
+        add2D(-0.5, -0.5, STROKE);         
 
         double x=0; 
 
@@ -397,7 +405,7 @@ public class H1DPanel extends GPanel
         for (int k=0; k<shmin.length(); k++)
         {
             int ic = (int) shmin.charAt(k) + iFontcode; 
-            addScaledItem(x, yruler-hyoffset, 0.0, ic); 
+            add2D(x, yruler-hyoffset, ic); 
             x += scaledW; 
         }
 
@@ -406,7 +414,7 @@ public class H1DPanel extends GPanel
         for (int k=0; k<shmax.length(); k++)
         {
             int ic = (int) shmax.charAt(k) + iFontcode; 
-            addScaledItem(x, yruler-hyoffset, 0.0, ic); 
+            add2D(x, yruler-hyoffset, ic); 
             x += scaledW; 
         }
 
@@ -418,20 +426,20 @@ public class H1DPanel extends GPanel
         {
             int ic = (int) hst.charAt(k) + iFontcode; 
             x = scaledW*(k-nchars/2); 
-            addScaledItem(x, yruler-hyoffset, ic); 
+            add2D(x, yruler-hyoffset, ic); 
         }
 
         //-------v ruler at left and right-----------
 
-        addXYZO(COMMENTRULER);
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);
 
         for (int i=0; i<vnticks; i++)
         {
             double yy = -0.5 + vticks[i]/histotop;
-            addScaledItem(-0.5, yy, MOVETO); 
-            addScaledItem(-0.5+xtick, yy, STROKE); 
-            addScaledItem(+0.5, yy, MOVETO); 
-            addScaledItem(+0.5-xtick, yy, STROKE); 
+            add2D(-0.5, yy, MOVETO); 
+            add2D(-0.5+xtick, yy, STROKE); 
+            add2D(+0.5, yy, MOVETO); 
+            add2D(+0.5-xtick, yy, STROKE); 
         }
 
         //------vertical axis tick labels loop-----------
@@ -445,7 +453,7 @@ public class H1DPanel extends GPanel
                 int ic = (int) s.charAt(k) + iFontcode;     
                 double xvert = -0.5 + scaledW*(k-nchars-vrhgap); 
                 double yvert = -0.5 + vticks[i]/histotop + vyoffset; 
-                addScaledItem(xvert, yvert, ic);          
+                add2D(xvert, yvert, ic);          
             }
         } 
 
@@ -458,21 +466,21 @@ public class H1DPanel extends GPanel
         {
             int ic = (int) vst.charAt(k) + iFontcode; 
             double xvert = -0.5 + (k-nchars-3)*scaledW;
-            addScaledItem(xvert, 0.1, ic);
+            add2D(xvert, 0.1, ic);
         }
 
         //---------now draw the histogram-----------
 
         double dx = 1.0/nbins; 
         double y1 = -0.5 + histo[1]/histotop; 
-        addScaledItem(-0.5, y1, MOVETO); 
+        add2D(-0.5, y1, MOVETO); 
         for (int i=1; i<nbins; i++)
         {
             double xhisto = -0.5 + i*dx;     
             double yhisto = -0.5 + histo[i]/histotop;  
-            addScaledItem(xhisto, yhisto, PATHTO); 
+            add2D(xhisto, yhisto, PATHTO); 
             int op = (i < nbins-1) ? PATHTO : STROKE; 
-            addScaledItem(xhisto+dx, yhisto, op); 
+            add2D(xhisto+dx, yhisto, op); 
         }
 
         if (bShowAverage && (count > 0))
@@ -484,10 +492,9 @@ public class H1DPanel extends GPanel
             {
                 int ic = (int) sAverage.charAt(k) + iFontcode; 
                 x = scaledW*(k-nchar/2); 
-                addScaledItem(x, ytop+hyoffset, ic); 
+                add2D(x, ytop+hyoffset, ic); 
             }
         }
-            
     } // end doTechList().
 
 

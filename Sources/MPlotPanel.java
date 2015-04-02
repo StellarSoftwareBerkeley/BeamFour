@@ -7,6 +7,8 @@ import java.util.*;        // ArrayList
 
 /** MultiPlot Artwork Generator
   *
+  * A173: Adopting five GPanel quadLists and GPanel helper methods.
+  *
   * A150: uses new Options dialog with explicit lists of variable values;
   *   allows wavelength & color to be linked to U0 or V0.
   *   Uses a new feature: RT13.gwave permits commandeering wavelength.
@@ -65,7 +67,7 @@ import java.util.*;        // ArrayList
   * exit gracefully from case of failed Parse() with clear
   * error dialog and no plot.  Have a flag bParseOK.
   *
-  * @author M.Lampton (c) STELLAR SOFTWARE 2007 all rights reserved.
+  * @author M.Lampton (c) STELLAR SOFTWARE 2007-2015 all rights reserved.
   */
 public class MPlotPanel extends GPanel
 {
@@ -207,11 +209,6 @@ public class MPlotPanel extends GPanel
     {
         // addRandomRays(); 
         return false;  //true; 
-    }
-
-    protected void doFinishArt()    // replaces abstract "do" method
-    {
-        return; 
     }
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
@@ -729,8 +726,22 @@ public class MPlotPanel extends GPanel
             hspan = vspan = Math.max(hspan, vspan); 
     } 
 
-        
-    //-------artwork is done after the boxes are computed----------
+
+
+
+
+
+
+    //----------ARTWORK-------------------------------------------
+    //----------ARTWORK-------------------------------------------
+    //----------ARTWORK-------------------------------------------
+    //-------artwork is done after the boxes are computed---------
+    
+    private void add2D(double x, double y, int op)  // local shorthand
+    {
+        addScaled(x, y, 0.0, op, QBASE);  // GPanel service
+    }
+    
         
         
     private void doArt()  
@@ -747,9 +758,13 @@ public class MPlotPanel extends GPanel
         boolean bSkip     = "T".equals(DMF.reg.getuo(UO_MPLOT, 31)); 
         boolean bRestrict = "T".equals(DMF.reg.getuo(UO_MPLOT, 32)); 
 
-        clearXYZO();       
-        addXYZO(blackbkg ? SETBLACKBKG : SETWHITEBKG);
-        addXYZO(SETCOLOR + (blackbkg ? WHITE : BLACK)); 
+        clearList(QBASE); 
+        int background = blackbkg ? SETBLACKBKG : SETWHITEBKG; 
+        int foreground = blackbkg ? WHITE : BLACK; 
+        addRaw(0., 0., 0., background, QBASE);            // unscaled
+        addRaw(0., 0., 0., SETCOLOR+foreground, QBASE);   // unscaled
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE);          // unscaled
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);          // unscaled
 
         ///----set up the drawing grid centers------------
 
@@ -767,7 +782,6 @@ public class MPlotPanel extends GPanel
 
         //-------draw the boxes and ray hit results---------
         
-        addXYZO(1.0, SETSOLIDLINE); 
         iSymbol = DOT; 
 
         for (int i=0; i<nHsteps; i++)
@@ -788,7 +802,7 @@ public class MPlotPanel extends GPanel
      
               //---draw the plotbox---
 
-              addXYZO(SETCOLOR + (blackbkg ? WHITE : BLACK)); 
+              addRaw(0., 0., 0., SETCOLOR+foreground, QBASE);   // unscaled
               if (bRound)
                 addScaledCircle(xcbox, ycbox, halfbox);
               else
@@ -803,7 +817,7 @@ public class MPlotPanel extends GPanel
                      int ic = (int) sss.charAt(k) + iFontcode; 
                      double x = xcbox + scaledW*(k-0.5*nchars+0.5); 
                      double y = ycbox + halfbox + scaledW; 
-                     addScaledItem(x, y, 0.0, ic); 
+                     add2D(x, y, ic); 
                   }
               } 
               for (int k=0; k<ngood[i][j]; k++) // draw the saved ray symbols
@@ -827,13 +841,13 @@ public class MPlotPanel extends GPanel
 
                   x = xcbox + x*halfbox; 
                   y = ycbox + y*halfbox;
-                  buildScaledItem(x, y, iSymbol+icolor, false); // false=TableList
+                  add2D(x, y, iSymbol+icolor);
               }
           }
 
           //----show the display box size in user units-----
 
-          addXYZO(SETCOLOR + (blackbkg ? WHITE : BLACK)); 
+          addRaw(0., 0., 0., SETCOLOR + (blackbkg ? WHITE : BLACK), QBASE); 
           String ss = "Hscale="+U.gd(hspan)+"  Vscale="+U.gd(vspan); 
           int nchars = ss.length(); 
           for (int k=0; k<nchars; k++)
@@ -841,10 +855,8 @@ public class MPlotPanel extends GPanel
               int ic = (int) ss.charAt(k) + iFontcode; 
               double x = scaledW*(k-0.5*nchars+0.5); 
               double y = ytop + 3*scaledW; 
-              addScaledItem(x, y, 0.0, ic);
+              add2D(x, y, ic);
           }
-
-
     }  //-----end of doArt()-------
 
 
@@ -872,27 +884,27 @@ public class MPlotPanel extends GPanel
     private void addScaledSquare(double xc, double yc, double radius)
     // draws a square at specified location and radius
     {
-        addScaledItem(xc-radius, yc-radius, MOVETO); 
-        addScaledItem(xc+radius, yc-radius, PATHTO); 
-        addScaledItem(xc+radius, yc+radius, PATHTO); 
-        addScaledItem(xc-radius, yc+radius, PATHTO); 
-        addScaledItem(xc-radius, yc-radius, STROKE); 
+        add2D(xc-radius, yc-radius, MOVETO); 
+        add2D(xc+radius, yc-radius, PATHTO); 
+        add2D(xc+radius, yc+radius, PATHTO); 
+        add2D(xc-radius, yc+radius, PATHTO); 
+        add2D(xc-radius, yc-radius, STROKE); 
     }
     
     private void addScaledCircle(double xc, double yc, double radius)
     {
         double xprev = xc + radius;
         double yprev = yc;
-        addScaledItem(xprev, yprev, MOVETO); 
+        add2D(xprev, yprev, MOVETO); 
         for (int i=1; i<=36; i++)
         {
             double x = xc + radius*U.cosd(10*i);
             double y = yc + radius*U.sind(10*i); 
-            addScaledItem(x, y, PATHTO); 
+            add2D(x, y, PATHTO); 
             xprev = x; 
             yprev = y; 
         }
-        addScaledItem(xprev, yprev, STROKE);     
+        add2D(xprev, yprev, STROKE);     
     }
     
     private String getPlotBoxLabel(int i, int j)
@@ -972,57 +984,4 @@ public class MPlotPanel extends GPanel
         }
         return sss; 
     }
-    
-
-
-
-
-/************* not implemented ************************************    
-    private void addRandomRays()
-    {
-        saveInitialParms(); 
-        for (int i=0; i<nHsteps; i++)
-          for (int j=0; j<nVsteps; j++)
-            doOneRandomRay(i,j); 
-        restoreInitialParms();
-    }
-    
-    private void doOneRandomRay(int i, int j)
-    {     
-        deviateAllInitialParms(i, j);  // assumes parms were initialized
-        if (DEBUGGING && (DMF.idebug > 1))
-        {
-            if ((i<10) && (j<10))
-            {
-               double u0 = RT13.raystarts[1][RV];
-            }
-        }
-  
-        boolean bOK = RT13.bRunRandomRay(); 
-        if (bOK)
-        {
-            int kkk = RT13.getGuideRay();  
-            int icolor = (int) RT13.raystarts[kkk][RSCOLOR]; 
-            boolean blackbkg = "T".equals(DMF.reg.getuo(UO_MPLOT, 29));
-            if (blackbkg && (icolor==BLACK))
-              icolor = WHITE; 
-
-            double xxx = RT13.dGetRay(0, hsurf, hattr); 
-            double yyy = RT13.dGetRay(0, vsurf, vattr); 
-                        double x = xxx - centroids[i][j][0]; // user units
-            double y = yyy - centroids[i][j][1]; // user units
-                       
-            x *= 2.0*halfbox/hspan; // magnify to the span
-            y *= 2.0*halfbox/vspan; // magnify to the span
-            
-            double xcbox = gridstep*(i - 0.5*nHsteps + 0.5); 
-            double ycbox = gridstep*(j - 0.5*nVsteps + 0.5); 
-            
-            x += xcbox;             // translate to the grid center
-            y += ycbox;             // translate to the grid center
-                       
-            buildScaledItem(x, y, DOT, true); // BLACK DOT
-        }
-    }
-******************************************/
 }

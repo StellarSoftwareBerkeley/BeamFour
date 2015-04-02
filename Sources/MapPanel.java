@@ -8,12 +8,13 @@ import java.awt.event.*;   // Events
 
 @SuppressWarnings("serial")
 
-/** 2015: improved output text file, including .CSV format.
+/** March 2015: adopted explicit QBASE for artwork quads. 
+  * March 2015: improved output text file, including .CSV format.
   * 2012: Scales added for HorVar and VertVar
   * 2011: With this plan every options starts a fresh new run.
   * But... changes in the optics or ray tables do not start a fresh run.
   * In MultiPlot, they do. 
-  * Would be nice if ray or optics changes trigger a fresh run!
+  * Would be nice if ray or optics changes trigger a fresh run.
   *
   * Here we offer only WFE and PSF (x,y) not PSF(u,v). 
   *
@@ -161,7 +162,7 @@ public class MapPanel extends GPanel // implements Runnable
     {
         myGJIF = gj;  
         bClobber = true; 
-        uxcenter = 0.0;         // unit square
+        uxcenter = 0.0;         // unit square; for GPanel's addAffines.
         uxspan   = EXTRA;       // unit square
         uycenter = 0.0;         // unit square
         uyspan   = EXTRA;       // unit square
@@ -197,27 +198,6 @@ public class MapPanel extends GPanel // implements Runnable
         return true; 
     } 
     
-    protected void doFinishArt()     // replaces abstract "do" method
-    {
-        if (bOutfile && (sList != null) && (sList.size() > 0))
-        {
-            File file = new File(sOutfile); 
-            try
-            {
-                FileWriter fw = new FileWriter(file); 
-                PrintWriter pw = new PrintWriter(fw, true);
-                for (int i=0; i<sList.size(); i++)
-                  pw.println(sList.get(i)); 
-                pw.flush();
-                pw.close(); 
-            }
-            catch (IOException e)
-            { 
-                System.out.println("File write failed."); 
-            }
-        }
-    }
-
     protected void doCursor(int ix, int iy)  // replaces abstract method
     {
         return; 
@@ -709,12 +689,43 @@ public class MapPanel extends GPanel // implements Runnable
         }
     }
 
+    private void doFinishFile()
+    {
+        if (bOutfile && (sList != null) && (sList.size() > 0))
+        {
+            File file = new File(sOutfile); 
+            try
+            {
+                FileWriter fw = new FileWriter(file); 
+                PrintWriter pw = new PrintWriter(fw, true);
+                for (int i=0; i<sList.size(); i++)
+                  pw.println(sList.get(i)); 
+                pw.flush();
+                pw.close(); 
+            }
+            catch (IOException e)
+            { 
+                System.out.println("File write failed."); 
+            }
+        }
+    }
+
+
+
 
 
 
     //---------ARTWORK BEGINS HERE----------------
     //---------ARTWORK BEGINS HERE----------------
     //---------ARTWORK BEGINS HERE----------------
+    
+    
+    private void add2D(double x, double y, int op)  // local shorthand
+    {
+        addScaled(x, y, 0.0, op, QBASE);  // GPanel service
+    }
+    
+    
 
     private void doArt()
     // This gets called many times, showing intermediate maps..... 
@@ -730,14 +741,15 @@ public class MapPanel extends GPanel // implements Runnable
         getMapCenters(); 
         gatherMinMax(); 
         
-        //----start the drawing-----------
-
-        clearXYZO();       
-        addXYZO(SETWHITEBKG);
-        addXYZO(SETCOLOR + BLACK); 
-        addXYZO(1.0, SETSOLIDLINE);
+        //---start the drawing, explicit new way----------
         
-        //-----draw the currently done color boxes-------------
+        clearList(QBASE); 
+        addRaw(0., 0., 0., SETWHITEBKG, QBASE);      // unscaled
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE);   // unscaled
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE);     // unscaled
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);     // unscaled
+                
+        //-----draw the currently completed color boxes-------------
 
         double dx     = aspect/nH; 
         double dy     = 1.0/nV; 
@@ -760,29 +772,28 @@ public class MapPanel extends GPanel // implements Runnable
               d = BADCELL;  // out of range forces gray.
 
             //---draw and fill each rectangle------
+                            
+            if ((d >= 0.0) && (d <= 1.0))  
+              addRaw(U.getRed(d), U.getGreen(d), U.getBlue(d), SETRGB, QBASE); 
+            else                         
+              addRaw(0., 0., 0., SETCOLOR+LTGRAY, QBASE);   
               
-            if ((d >= 0.0) && (d <= 1.0))   // within range
-              addXYZO(U.getRed(d), U.getGreen(d), U.getBlue(d), SETRGB);
-            else                            // out of range
-              addXYZO(SETCOLOR + LTGRAY); 
-            addScaledItem(x,     y,     MOVETO); 
-            addScaledItem(x+dxe, y,     PATHTO); 
-            addScaledItem(x+dxe, y+dye, PATHTO); 
-            addScaledItem(x,     y+dye, PATHTO); 
-            addScaledItem(x,     y,     FILL); 
+            add2D(x, y, MOVETO); 
+            add2D(x+dxe, y, PATHTO); 
+            add2D(x+dxe, y+dye, PATHTO); 
+            add2D(x, y+dye, PATHTO); 
+            add2D(x, y, FILL); 
         }
-
-
   
         //-----display the stepped parameter names------
         
-        addXYZO(SETCOLOR + BLACK); 
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE);   // unscaled
         for (int k=0; k<sHvar.length(); k++)
         {
             int ic = (int) sHvar.charAt(k) + iFontcode; 
             double x = 0.5 - 0.5*aspect + scaledW * k; 
             double y = ybase - 0.08; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
         
         for (int k=0; k<sVvar.length(); k++)
@@ -790,7 +801,7 @@ public class MapPanel extends GPanel // implements Runnable
             int ic = (int) sVvar.charAt(k) + iFontcode; 
             double x = xbase -0.08 + scaledW*(k - sVvar.length()); 
             double y = 0.0; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
 
         //--draw the tick marks & user variable labels------------
@@ -800,14 +811,14 @@ public class MapPanel extends GPanel // implements Runnable
         double yBot   = ybase + 0.5*dy; 
         double yTop   = ybase + (nV-0.5)*dy; 
 
-        addScaledItem(xLeft,  ybase-0.01, MOVETO); 
-        addScaledItem(xLeft,  ybase-0.05, STROKE); 
-        addScaledItem(xRight, ybase-0.01, MOVETO); 
-        addScaledItem(xRight, ybase-0.05, STROKE); 
-        addScaledItem(xbase-0.01, yBot, MOVETO); 
-        addScaledItem(xbase-0.05, yBot, STROKE); 
-        addScaledItem(xbase-0.01, yTop, MOVETO); 
-        addScaledItem(xbase-0.05, yTop, STROKE); 
+        add2D(xLeft,  ybase-0.01, MOVETO); 
+        add2D(xLeft,  ybase-0.05, STROKE); 
+        add2D(xRight, ybase-0.01, MOVETO); 
+        add2D(xRight, ybase-0.05, STROKE); 
+        add2D(xbase-0.01, yBot, MOVETO); 
+        add2D(xbase-0.05, yBot, STROKE); 
+        add2D(xbase-0.01, yTop, MOVETO); 
+        add2D(xbase-0.05, yTop, STROKE); 
 
         String sHmin = U.gd(dHmin);  // U.fwe(dHmin); 
         int    nHmin = sHmin.length(); 
@@ -822,28 +833,28 @@ public class MapPanel extends GPanel // implements Runnable
             int ic = (int) sHmin.charAt(k) + iFontcode; 
             double x = xLeft + scaledW * (k-nHmin/2); 
             double y = ybase - 0.08; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
         for (int k=0; k<nHmax; k++)  // lower right centered
         {
             int ic = (int) sHmax.charAt(k) + iFontcode; 
             double x = xRight + scaledW * (k-nHmax/2); 
             double y = ybase - 0.08; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
         for (int k=0; k<nVmin; k++)  // lower left right justified
         {
             int ic = (int) sVmin.charAt(k) + iFontcode; 
             double x = xbase -0.05 + scaledW * (k-nVmin+1); 
             double y = yBot; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
         for (int k=0; k<nVmax; k++)  // upper left right justified
         {
             int ic = (int) sVmax.charAt(k) + iFontcode; 
             double x = xbase -0.08 + scaledW * (k-nVmax+1); 
             double y = yTop; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
 
 
@@ -861,7 +872,7 @@ public class MapPanel extends GPanel // implements Runnable
             myGJIF.postWarning(""); 
         }
           
-        addXYZO(COMMENTRULER);       
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);       
         int nthermo = 100; 
         double xright = +0.6; 
         dy = 1.0/nthermo; 
@@ -872,18 +883,18 @@ public class MapPanel extends GPanel // implements Runnable
         {
             double z = i*dy; 
             double y = ybase + z; 
-            addXYZO(U.getRed(z), U.getGreen(z), U.getBlue(z), SETRGB);
-            addScaledItem(xright,     y,     MOVETO); 
-            addScaledItem(xright+dx,  y,     PATHTO); 
-            addScaledItem(xright+dx,  y+dye, PATHTO); 
-            addScaledItem(xright,     y+dye, PATHTO); 
-            addScaledItem(xright,     y,     FILL); 
+            addRaw(U.getRed(z), U.getGreen(z), U.getBlue(z), SETRGB, QBASE);
+            add2D(xright,     y,     MOVETO); 
+            add2D(xright+dx,  y,     PATHTO); 
+            add2D(xright+dx,  y+dye, PATHTO); 
+            add2D(xright,     y+dye, PATHTO); 
+            add2D(xright,     y,     FILL); 
         }
 
         //----add labels to the thermometer----
 
 
-        addXYZO(SETCOLOR + BLACK); 
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE); 
 
         String s[] = new String[3]; 
         s[0] = U.fwe(mindatum); 
@@ -895,7 +906,7 @@ public class MapPanel extends GPanel // implements Runnable
               int ic = (int) s[i].charAt(k) + iFontcode; 
               double x = xright + dx + scaledW*k;    
               double y = ybase + 0.5*i; 
-              addScaledItem(x, y, ic); 
+              add2D(x, y, ic); 
           }
     } //-----------end of doArt()-------------------------
 
@@ -915,17 +926,15 @@ public class MapPanel extends GPanel // implements Runnable
         
         //----the drawing-----------
 
-        clearXYZO();       // always clear initial quadlist
-
-        addXYZO(SETWHITEBKG);
-        addXYZO(SETCOLOR + BLACK); 
-        
+        clearList(QBASE);     // always clear initial quadlist
+        addRaw(0., 0., 0., SETWHITEBKG, QBASE);
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE);         
         for (int k=0; k<s.length(); k++)
         {
             int ic = (int) s.charAt(k) + iFontcode; 
             double x = scaledW*k; 
             double y = 0.0; 
-            addScaledItem(x, y, ic); 
+            add2D(x, y, ic); 
         }
     }
 
@@ -936,7 +945,7 @@ public class MapPanel extends GPanel // implements Runnable
     //     Interfaces are.....
     //     doBunchRays() above.
     //     redo()      in GPanel; with bClobber=true, calls doArt() here.
-    //     doFinish()  in GPanel: calls doFinishArt() here. 
+    //     doFinishFile()  is called at end of timer run here. 
 
     private javax.swing.Timer myTimer; 
     private int goodcount=0;
@@ -968,7 +977,7 @@ public class MapPanel extends GPanel // implements Runnable
             else
             {
                 myTimer.stop(); 
-                doFinish(); // GPanel calls doFinishArt(), and repaints. 
+                doFinishFile(); 
             }
         } 
     };

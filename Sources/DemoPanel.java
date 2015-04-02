@@ -11,10 +11,9 @@ import javax.swing.*;      // Graphics2D features
   * Internal coord frame is unit cube, center origin, +y=up.
   * Output coord frame is dUOpixels cube, center origin, +y=up.
   *
-  * Implements Thread to force slow rotations.
-  * But: the rotations fail to show without stirring. 
+  * Adopting explicit baseList artwork. 
   *
-  * @author M.Lampton (c) STELLAR SOFTWARE 2004 all rights reserved.
+  * @author M.Lampton (c) STELLAR SOFTWARE 2004-2015 all rights reserved.
 */
 public class DemoPanel extends GPanel // implements Runnable
 {
@@ -29,12 +28,10 @@ public class DemoPanel extends GPanel // implements Runnable
     public DemoPanel(GJIF gj) // constructor
     {
         myGJIF = gj;          // protected; used here & GPanel
-        uxcenter = 0.0;       // needed for GPanel's addAffines()
-        uxspan = EXTRAROOM;   // needed for GPanel's addAffines()
-        uycenter = 0.0;       // needed for GPanel's addAffines()
-        uyspan = EXTRAROOM;   // needed for GPanel's addAffines()
-        // uzcenter = 0.0; 
-        // uzspan = EXTRAROOM; 
+        uxcenter = 0.0;       // optional for GPanel's addAffines()
+        uxspan = EXTRAROOM;   // optional for GPanel's addAffines()
+        uycenter = 0.0;       // optional for GPanel's addAffines()
+        uyspan = EXTRAROOM;   // optional for GPanel's addAffines()
 
         az = +22; 
         cosaz = U.cosd(az); 
@@ -42,54 +39,10 @@ public class DemoPanel extends GPanel // implements Runnable
         el = +33;
         cosel = U.cosd(el); 
         sinel = U.sind(el);
-        
-        /*******Thread*****
-        count = 0;                  
-        myThread = new Thread(this); 
-        myThread.start();  
-        *******************/
     }
 
-    /*******Thread*******
-    
-    public void doMathAndRepaint()
-    {
-        if (count < MAXTHREAD)
-        {
-            count += 1;
-            az += 1; 
-            if (count < MAXTHREAD)
-              myGJIF.setTitle("Thread: "+count); 
-            else
-              myGJIF.setTitle("Demo Panel"); 
-        }
-        else
-           myThread = null; 
-        repaint(); 
-    }
-    
-    private Thread myThread = null;
-    private int MAXTHREAD = 100; 
-    private int count = 0; 
-    
-    public void run()
-    {
-        try
-        {
-            while (count < MAXTHREAD)
-            {
-                doMathAndRepaint(); 
-                Thread.sleep(100); 
-            }
-        }
-        catch (InterruptedException e)
-        {
-        }
-    }
-    *********************/        
-            
-            
-            
+
+                    
     //-----protected methods-----------
     
     protected void doTechList(boolean bFullArt)  // replaces abstract method
@@ -118,13 +71,6 @@ public class DemoPanel extends GPanel // implements Runnable
     {
         return false;
     } 
-
-
-    protected void doFinishArt() // replaces abstract "do" method
-    {
-        return; 
-    }
-
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
     // delivers current cursor coordinates
@@ -184,13 +130,43 @@ public class DemoPanel extends GPanel // implements Runnable
     }
 
 
+
+
+
+
+
+    //-----ARTWORK METHODS---------------
+    //-----ARTWORK METHODS---------------
+    
+    
+    
+    void addViewBase(double x, double y, double z, int op)
+    {
+        double xyz[] = {x, y, z}; 
+        addViewBase(xyz, op); 
+    }
+    
+    void addViewBase(double[] xyz, int op)
+    {
+        viewelaz(xyz);                // local rotation operator
+        addScaled(xyz, op, QBASE);    // GPanel service
+    }
+    
+    void addRawBase(double x, double y, double z, int op)
+    {
+        addRaw(x, y, z, op, QBASE);   // GPanel service
+    }
+
+	//-----------------------done with test------------------------
+
     private void doArt()  
     {
         double xyz[] = new double[3]; 
-        clearXYZO();       
-        addXYZO(SETWHITEBKG);
-        addXYZO(SETCOLOR + BLACK); 
-        addAffines(); // a service of host GPanel
+        clearList(QBASE); 
+        addRaw(0., 0., 0., SETWHITEBKG, QBASE); 
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE); 
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
+
         for (int i=0; i<6; i++)
           drawJ(jjj[i]); 
     }
@@ -201,106 +177,71 @@ public class DemoPanel extends GPanel // implements Runnable
         double xyz[] = new double[3]; 
         switch(j)
         {
-          case 0:  ///////// draw the floor z=-0.5 ////////
-            addXYZO(SETCOLOR + BLUE); 
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, FILL);
-            addString(0, 0, -0.5, "BLUE"); 
+          case 0:  //-----draw the blue floor z=-0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+BLUE);
+            addViewBase(-0.5, -0.5, -0.5, MOVETO); 
+            addViewBase(+0.5, -0.5, -0.5, PATHTO); 
+            addViewBase(+0.5, +0.5, -0.5, PATHTO); 
+            addViewBase(-0.5, +0.5, -0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, -0.5, FILL); 
+            addString(   0.0,  0.0, -0.5, "BLUE"); 
             break; 
 
-          case 1:  ///////// draw the frontwall y=-0.5 ////
-            addXYZO(SETCOLOR + RED); 
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, FILL);
-            addString(0, -0.5, 0, "RED"); 
+          case 1:  //-----draw the red frontwall y=-0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+RED);
+            addViewBase(-0.5, -0.5, -0.5, MOVETO); 
+            addViewBase(+0.5, -0.5, -0.5, PATHTO); 
+            addViewBase(+0.5, -0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, -0.5, FILL); 
+            addString(   0.0, -0.5,  0.0, "RED"); 
+            break; 
+          
+          case 2:  //-----draw the green leftwall x=-0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+GREEN);
+            addViewBase(-0.5, -0.5, -0.5, MOVETO); 
+            addViewBase(-0.5, +0.5, -0.5, PATHTO); 
+            addViewBase(-0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, -0.5, FILL); 
+            addString(  -0.5,  0.0,  0.0, "GREEN"); 
             break; 
 
-          case 2:  ///////// draw the leftwall x=-0.5 ////
-            addXYZO(SETCOLOR + GREEN); 
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, FILL);
-            addString(-0.5, 0, 0, "GREEN"); 
-            break; 
-
-          case 3:  ///////// draw the topwall z=+0.5 ///
-            addXYZO(SETCOLOR + MAGENTA); 
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, FILL);
-            addString(0, 0, +0.5, "MAGENTA"); 
-            break; 
-
-          case 4: ///////// draw the backwall y=+0.5 /////
-            addXYZO(SETCOLOR + CYAN); 
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, FILL);
-            addString(0, +0.5, 0, "CYAN"); 
-            break; 
-
-          case 5:  ///////// draw the rightwall x=+0.5 ///
-            addXYZO(SETCOLOR + YELLOW); 
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, MOVETO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = +0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, PATHTO);
-            xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-            addViewedItem(xyz, FILL);
-            addString(+0.5, 0, 0, "YELLOW"); 
-            break; 
-
+          case 3:  //-----draw the magenta topwall z=+0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+MAGENTA);
+            addViewBase(-0.5, -0.5, +0.5, MOVETO); 
+            addViewBase(+0.5, -0.5, +0.5, PATHTO); 
+            addViewBase(+0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, -0.5, +0.5, FILL); 
+            addString(   0.0,  0.0, +0.5, "MAGENTA"); 
+            break;           
+          
+          case 4: //----draw the cyan backwall y=+0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+CYAN);
+            addViewBase(-0.5, +0.5, -0.5, MOVETO); 
+            addViewBase(+0.5, +0.5, -0.5, PATHTO); 
+            addViewBase(+0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(-0.5, +0.5, -0.5, FILL); 
+            addString(   0.0, +0.5,  0.0, "CYAN"); 
+            break;           
+          
+          case 5:  //-----draw the yellow rightwall x=+0.5
+            addRawBase(  0.0,  0.0,  0.0, SETCOLOR+YELLOW);
+            addViewBase(+0.5, -0.5, -0.5, MOVETO); 
+            addViewBase(+0.5, +0.5, -0.5, PATHTO); 
+            addViewBase(+0.5, +0.5, +0.5, PATHTO); 
+            addViewBase(+0.5, -0.5, +0.5, PATHTO); 
+            addViewBase(+0.5, -0.5, -0.5, FILL); 
+            addString(  +0.5,  0.0,  0.0, "YELLOW"); 
+            break;           
+          
           default: break; 
        }
     }  // end of drawJ()
 
 
-    void addViewedItem(double[] xyz, int op)
-    {
-        viewelaz(xyz); 
-        addScaledItem(xyz, op); 
-    }
 
     void addString(double x, double y, double z, String s)
     // Places a string at a desired center location [xyz].
@@ -317,14 +258,14 @@ public class DemoPanel extends GPanel // implements Runnable
         double xtick = 0.5 * iWpoints * uxspan / dUOpixels; 
         double ytick = 0.5 * iWpoints * uyspan / dUOpixels;  
 
-        addXYZO(SETCOLOR + BLACK); 
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE); 
         int nchars = s.length(); 
         xyz[0] -= 0.5 * scaledW * nchars;
         for (int k=0; k<nchars; k++)
         {
              int ic = (int) s.charAt(k) + iFontcode; 
              xyz[0] += scaledW; 
-             addScaledItem(xyz, ic); 
+             addScaled(xyz, ic, QBASE); 
         }
     }
 

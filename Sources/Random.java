@@ -156,7 +156,6 @@ class Random implements B4constants
             else
             {
                 myTimer.stop(); 
-                targetPanel.doFinish(); 
                 jbDone.setText("Done"); 
             }
         } 
@@ -167,7 +166,6 @@ class Random implements B4constants
     {
         myTimer.stop(); 
         myTimer = null; 
-        targetPanel.doFinish(); 
         jd.setVisible(false);  
         jd = null; 
         totalcount = 0;

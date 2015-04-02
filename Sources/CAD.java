@@ -28,7 +28,7 @@ import javax.swing.*;           // JFileChooser
   *
   * Each char comes with its own fontcode = sum of terms:
   *     ASCIIchar = opcode % 1000 = bottom three digits
-  *     fontcode = opcode / 1000  = higher digits
+  *     fontcode = opcode / 1000  = top three digits
   *     fontcode = 10*fontsizePoints + (bBold ? 1 : 0)
   *     fontsizePoints = fontcode / 10;
   *     bBold = (1 == fontcode % 2); 
@@ -40,7 +40,9 @@ import javax.swing.*;           // JFileChooser
   *
   *  DXF methods need to backconvert from points to UserDims.  <<done.
   *
-  *  @author M.Lampton (c) 2004 STELLAR SOFTWARE all rights reserved.
+  *  A172: using four quad lists: baseList, randList, finishList, annoList. 
+  *
+  *  @author M.Lampton (c) 2004 - 2015 STELLAR SOFTWARE all rights reserved.
   */
 class CAD implements B4constants  
 {
@@ -48,14 +50,30 @@ class CAD implements B4constants
     private static int prevFontCode=0;  // serves all CAD flavors
 
 
-    public static boolean doCAD(int style, boolean bPort, 
-                    ArrayList<XYZO> a, ArrayList<XYZO> b, ArrayList<XYZO> c)
+    public static boolean doCAD(int style, boolean bPort, ArrayList<XYZO> a, 
+        ArrayList<XYZO> b, ArrayList<XYZO> c, ArrayList<XYZO> d)
     // Called via DMF >> GJIF >> GPanel line 245>> here, like this: 
-    // CAD.doCAD(style, bPortrait, myTechList, myRandList, myAnnoList);
-    // No bitmap options here; instead see BJIF:doQuickPng().
+    // CAD.doCAD(style, bPortrait, baseList, randList, finishList, annoList);
+    // Vector art only; no bitmap options here; for bitmaps see BJIF:doQuickPng().
     {
+        //----reporting section-----------
+        int na = (a == null) ? -1 : a.size(); // baseList
+        int nb = (b == null) ? -1 : b.size(); // randList
+        int nc = (c == null) ? -1 : c.size(); // finishList
+        int nd = (d == null) ? -1 : d.size(); // annoList
+        System.out.println("CAD:doCAD()  na="+na+"   nb="+nb+"   nc="+nc+"  nd="+nd); 
+        
         if (a == null)
-          return false; 
+        {
+            System.out.println("CAD:doCAD() null ArrayList received. Exitting.");
+            return false;  
+        }     
+        if (a.size() < 1)
+        {
+            System.out.println("CAD:doCAD() empty ArrayList received. Exitting.");
+            return false;  
+        }     
+
         JFileChooser jfc = new JFileChooser(); 
         String sDir = DMF.sCurrentDir; 
         if (sDir != null)
@@ -65,31 +83,32 @@ class CAD implements B4constants
               if (fDir.isDirectory())
                 jfc.setCurrentDirectory(fDir);
         } 
-    
-        // System.out.println("doCAD CWD = "+jfc.getCurrentDirectory()); 
         
         int q = jfc.showSaveDialog(null); 
         if (q == JFileChooser.CANCEL_OPTION)
           return false; 
         File file = jfc.getSelectedFile(); 
         if (file == null)
-          return false; 
-
+        {
+        	System.out.println("CAD:doCAD() chosen file is unavailable. Exitting.");
+            return false; 
+        }
+        
         DMF.sCurrentDir = file.getParent();
 
         prevFontCode = 0; 
         boolean ok=false; 
         switch(style)
         {
-           case 0:   ok = listPS(bPort, a, b, c, file); break; 
-           case 1:   ok = listPLOT(bPort, 0, a, b, c, file); break; 
-           case 2:   ok = listPLOT(bPort, 1, a, b, c, file); break; 
-           case 3:   ok = listPLOT(bPort, 2, a, b, c, file); break; 
-           case 4:   ok = listPLOT(bPort, 3, a, b, c, file); break; 
-           case 5:   ok = listPLOT(bPort, 4, a, b, c, file); break; 
-           case 6:   ok = listDXF(2, a, b, c, file); break; 
-           case 7:   ok = listDXF(3, a, b, c, file); break;
-           case 8:  ok = listQuads(a, b, c, file); break; 
+           case 0:   ok = listPS(bPort, a, b, c, d, file); break; 
+           case 1:   ok = listPLOT(bPort, 0, a, b, c, d, file); break; 
+           case 2:   ok = listPLOT(bPort, 1, a, b, c, d, file); break; 
+           case 3:   ok = listPLOT(bPort, 2, a, b, c, d, file); break; 
+           case 4:   ok = listPLOT(bPort, 3, a, b, c, d, file); break; 
+           case 5:   ok = listPLOT(bPort, 4, a, b, c, d, file); break; 
+           case 6:   ok = listDXF(2, a, b, c, d, file); break; 
+           case 7:   ok = listDXF(3, a, b, c, d, file); break;
+           case 8:   ok = listQuads(a, b, c, d, file); break; 
         }
         return ok; 
     }
@@ -99,22 +118,22 @@ class CAD implements B4constants
    //////////////// PostScript graphics //////////////////////
 
     private static boolean listPS(boolean bPortrait, 
-    ArrayList<XYZO> a, ArrayList<XYZO> b, ArrayList<XYZO> c, File f)
+    ArrayList<XYZO> a, ArrayList<XYZO> b, ArrayList<XYZO> c, ArrayList<XYZO> d, File f)
     {
-        if ((a==null) || (f==null))
-          return false; 
         prevFontCode = 0; 
         PrintWriter pw; 
         try 
           { pw = new PrintWriter(new FileWriter(f), true);}
         catch (IOException ioe) 
           { return false; }
+          
         boolean bbkg = a.get(0).getO() == SETBLACKBKG; 
 
         initPS(pw, bPortrait, bbkg);
         writePSList(a, pw); 
         writePSList(b, pw);
         writePSList(c, pw); 
+        writePSList(d, pw); 
         pw.println(" showpage"); 
         pw.close(); 
         return true; 
@@ -242,17 +261,18 @@ class CAD implements B4constants
               pw.println(sx + sy + sz + " setrgbcolor"); // range 0...1
               break; 
               
-            case MOVETO:       pw.println(sx + sy + " moveto"); break;
-            case PATHTO:       pw.println(sx + sy + " lineto"); break;
-            case STROKE:       pw.println(sx + sy + " lineto stroke"); break; 
-            case FILL:         pw.println(sx + sy + " lineto closepath fill"); break; 
-            case COMMENTSHADE: pw.println("% surface shading"); break;
-            case COMMENTSURF:  pw.println("% surface arcs"); break;
-            case COMMENTRAY:   pw.println("% ray"); break;
-            case COMMENTAXIS:  pw.println("% axis"); break;
-            case COMMENTRULER: pw.println("% ruler"); break;
-            case COMMENTDATA:  pw.println("% data"); break;
-            case COMMENTANNO:  pw.println("% annotation"); break;
+            case MOVETO:        pw.println(sx + sy + " moveto"); break;
+            case PATHTO:        pw.println(sx + sy + " lineto"); break;
+            case STROKE:        pw.println(sx + sy + " lineto stroke"); break; 
+            case FILL:          pw.println(sx + sy + " lineto closepath fill"); break; 
+            case COMMENTSHADE:  pw.println("% shading"); break;
+            case COMMENTSURF:   pw.println("% arc"); break;
+            case COMMENTRAY:    pw.println("% ray"); break;
+            case COMMENTAXIS:   pw.println("% axis"); break;
+            case COMMENTRULER:  pw.println("% ruler"); break;
+            case COMMENTDATA:   pw.println("% data"); break;
+            case COMMENTANNO:   pw.println("% anno"); break;
+            case COMMENTFINISH: pw.println("% finish"); break; 
 
             default:
               if ((op>31) && (op<127))
@@ -310,7 +330,7 @@ class CAD implements B4constants
     private static double xoff=0.0, yoff=0.0; 
 
     private static boolean listPLOT(boolean bPortrait, int plotsize, 
-       ArrayList<XYZO> a, ArrayList<XYZO> b, ArrayList<XYZO> c, File f)
+       ArrayList<XYZO> a, ArrayList<XYZO> b, ArrayList<XYZO> c, ArrayList<XYZO> d, File f)
     {
         if ((a==null) || (f==null) || (plotsize<0) || (plotsize>4))
           return false; 
@@ -328,6 +348,7 @@ class CAD implements B4constants
         writePlotList(a, pw); 
         writePlotList(b, pw);
         writePlotList(c, pw); 
+        writePlotList(d, pw); 
         pw.println("PU;"); 
         pw.close(); 
         return true; 
@@ -488,7 +509,7 @@ class CAD implements B4constants
     private static double dxfxc, dxfxs, dxfyc, dxfys, dxfzc, dxfzs;
 
     private static boolean listDXF(int n, ArrayList<XYZO> a, 
-       ArrayList<XYZO> b,  ArrayList<XYZO> c, File f)
+       ArrayList<XYZO> b,  ArrayList<XYZO> c, ArrayList<XYZO> d, File f)
     {
         if ((a==null) || (f==null))
           return false; 
@@ -513,6 +534,7 @@ class CAD implements B4constants
         writeDXF(a, b3D, fontsize, pw); 
         writeDXF(b, b3D, fontsize, pw);
         writeDXF(c, b3D, fontsize, pw); 
+        writeDXF(d, b3D, fontsize, pw); 
         endDXF(pw); 
 
         pw.close(); 
@@ -724,7 +746,7 @@ class CAD implements B4constants
     ///////////////// Quad list /////////////////////////
 
     private static boolean listQuads(ArrayList<XYZO> a, ArrayList<XYZO> b, 
-        ArrayList<XYZO> c, File f)
+        ArrayList<XYZO> c, ArrayList<XYZO> d, File f)
     // lists the XYZO quads
     {
         if ((a==null) || (f==null))
@@ -814,6 +836,7 @@ class CAD implements B4constants
            case COMMENTRULER:  t = " COMMENTRULER"; break; 
            case COMMENTDATA:   t = " COMMENTDATA"; break; 
            case COMMENTANNO:   t = " COMMENTANNO"; break; 
+           case COMMENTFINISH: t = " COMMENTFINISH"; break; 
         }
         return t + u; 
     }

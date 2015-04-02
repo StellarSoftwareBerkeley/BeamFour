@@ -23,6 +23,7 @@ package com.stellarsoftware.beam;
   *     fontcode = 10*fontsizePoints + (bBold ? 1 : 0)
   *     fontsizePoints = fontcode / 10;
   *     bBold = (1 == fontcode % 2); 
+  * Example:  "A" in 12 point bold is  121065.
   * Must generate a new makeFont instruction if fontcode changes.
   * Initially zero (no font) so initial char creates makeFont.
   *

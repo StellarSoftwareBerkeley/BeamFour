@@ -16,7 +16,9 @@ import java.io.*;          // Save Data
   * Automatic scaling only, so far:  
   * Manual & Diameter scaling is not yet installed. 
   * 
-  * @author M.Lampton (c) STELLAR SOFTWARE 2004 all rights reserved.
+  * Converted to QBASE, March 2015, line 655. 
+  *
+  * @author M.Lampton (c) STELLAR SOFTWARE 2004-2015 all rights reserved.
   */
 public class H2DPanel extends GPanel
 {
@@ -24,7 +26,7 @@ public class H2DPanel extends GPanel
 
     //---non static to permit many instances----
     
-    final double EXTRAROOM = 1.5;  
+    final double EXTRAROOM = 2.0;  
     final double EXTRASPAN = 1.2; 
     final double MINSPAN = 1E-8; 
     final int    MAX2DBINS = 100; 
@@ -56,7 +58,7 @@ public class H2DPanel extends GPanel
     private int hsurf, hattr, vsurf, vattr;  
     private int prevGroups[] = new int[MAXSURFS+1]; // detect new groups
     private String hst, vst; 
-    private boolean bWhite, bOrch, bStereo; 
+    private boolean whitebkg, bOrch, bStereo; 
 
 
 
@@ -126,11 +128,6 @@ public class H2DPanel extends GPanel
         }
         return false; 
     } 
-
-    protected void doFinishArt()   // replaces abstract "do" method
-    {
-        return; 
-    }
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
     // delivers current cursor coordinates
@@ -400,6 +397,42 @@ public class H2DPanel extends GPanel
 
 
 
+
+
+
+
+
+    //------ARTWORK-----------------
+    //------ARTWORK-----------------
+    
+    void add3Dbase(double xyz[], int op)  // local shorthand; does scaling
+    {
+        addScaled(xyz[0], xyz[1], xyz[2], op, QBASE);  // GPanel service
+    }
+    
+    void add3Dview(double x, double y, double z, int op)
+    {
+        double xyz[] = {x, y, z}; 
+        viewelaz(xyz);                                    // does rotation
+        addScaled(xyz[0], xyz[1], xyz[2], op, QBASE);  // GPanel service
+    }
+
+    void viewelaz(double[] xyz)
+    // Puts a labframe point xyz into user's el, az viewframe
+    // Assumes that globals sinaz...cosel have been preset. 
+    // Formulas are for +Z=vertical axis
+    {
+        double horiz = xyz[0]*cosaz - xyz[1]*sinaz;
+        double vert =  xyz[0]*sinel*sinaz + xyz[1]*sinel*cosaz + xyz[2]*cosel;
+        double outof = -xyz[0]*cosel*sinaz - xyz[1]*cosel*cosaz + xyz[2]*sinel;
+        xyz[0] = horiz;
+        xyz[1] = vert;
+        xyz[2] = outof;
+    }
+
+
+
+
     private void doArt()
     {
         ngroups = DMF.giFlags[ONGROUPS];
@@ -414,28 +447,22 @@ public class H2DPanel extends GPanel
         double ytick = 0.5 * iWpoints * uyspan / dUOpixels;  
 
         //------------setup artwork------------
-
-        clearXYZO();       
-
-        bWhite = "T".equals(DMF.reg.getuo(UO_2D, 15));
-        addXYZO(bWhite ? SETWHITEBKG : SETBLACKBKG); 
-        addXYZO(SETCOLOR + (bWhite ? BLACK : WHITE)); 
-
-        addXYZO(1.0, SETSOLIDLINE);     // for rulers
-        addXYZO(COMMENTRULER);          // advertise the H ruler
+        
+        whitebkg = "T".equals(DMF.reg.getuo(UO_2D, 15));
+        clearList(QBASE);  
+        addRaw(0., 0., 0., (whitebkg ? SETWHITEBKG : SETBLACKBKG), QBASE);
+        addRaw(0., 0., 0., SETCOLOR+(whitebkg ? BLACK : WHITE), QBASE); 
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
+        addRaw(0., 0., 0., COMMENTRULER, QBASE); 
+        addAffines();   // doesn't seem to help fit the graphic into the window
 
         //----------------draw the floor-------------
 
-        xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-        addViewedItem(xyz, MOVETO);
-        xyz[0] = +0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-        addViewedItem(xyz, PATHTO);
-        xyz[0] = +0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-        addViewedItem(xyz, PATHTO);
-        xyz[0] = -0.5; xyz[1] = +0.5; xyz[2] = -0.5; 
-        addViewedItem(xyz, PATHTO);
-        xyz[0] = -0.5; xyz[1] = -0.5; xyz[2] = -0.5; 
-        addViewedItem(xyz, STROKE);
+        add3Dview(-0.5, -0.5, -0.5, MOVETO);
+        add3Dview(+0.5, -0.5, -0.5, PATHTO);
+        add3Dview(+0.5, +0.5, -0.5, PATHTO);
+        add3Dview(-0.5, +0.5, -0.5, PATHTO);
+        add3Dview(-0.5, -0.5, -0.5, STROKE);
 
         //------------add corner labels--------------
 
@@ -469,14 +496,14 @@ public class H2DPanel extends GPanel
 
         if (!bFront)
         {
-            addXYZO(SETCOLOR + (bWhite ? BLACK : WHITE)); 
-            addViewedItem(xruler, yruler, -0.5, MOVETO); 
-            addViewedItem(xruler, yruler, +0.5, STROKE); 
+            addRaw(0., 0., 0., SETCOLOR+(whitebkg ? BLACK : WHITE), QBASE); 
+            add3Dview(xruler, yruler, -0.5, MOVETO); 
+            add3Dview(xruler, yruler, +0.5, STROKE); 
             for (int i=0; i<nzticks; i++)
             {
                 double zz = -0.5 + zticks[i]/zmax; 
-                addViewedItem(xruler, yruler, zz, MOVETO); 
-                addViewedItem(xruler+xtick, yruler, zz, STROKE);
+                add3Dview(xruler, yruler, zz, MOVETO); 
+                add3Dview(xruler+xtick, yruler, zz, STROKE);
                 String s = U.fwd(zticks[i], 16, nzdigits).trim(); 
                 addStringRight(xruler, yruler, zz, s); 
             }
@@ -488,7 +515,7 @@ public class H2DPanel extends GPanel
         bStereo = "T".equals(DMF.reg.getuo(UO_2D, 17));
         if (bOrch || bStereo)
         {
-            addXYZO(1.0, SETSOLIDLINE); 
+            addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
             for (int ia=0; ia<nhbins; ia++)
               for (int ja=0; ja<nvbins; ja++)
               {
@@ -497,8 +524,8 @@ public class H2DPanel extends GPanel
                   double x = dx*i - 0.5 + dx/2;
                   double y = dy*j - 0.5 + dx/2;
                   double h = dhisto[i][j]; 
-                  addViewedItem(x, y, -0.5, MOVETO);
-                  addViewedItem(x, y,  h, STROKE);
+                  add3Dview(x, y, -0.5, MOVETO);
+                  add3Dview(x, y,  h, STROKE);
               }
         }
         else // manhattan format
@@ -553,14 +580,14 @@ public class H2DPanel extends GPanel
 
         if (bFront)
         {
-            addXYZO(SETCOLOR + (bWhite ? BLACK : WHITE)); 
-            addViewedItem(xruler, yruler, -0.5, MOVETO); 
-            addViewedItem(xruler, yruler, +0.5, STROKE); 
+            addRaw(0., 0., 0., SETCOLOR+(whitebkg ? BLACK : WHITE), QBASE); 
+            add3Dview(xruler, yruler, -0.5, MOVETO); 
+            add3Dview(xruler, yruler, +0.5, STROKE); 
             for (int i=0; i<nzticks; i++)
             {
                 double zz = -0.5 + zticks[i]/zmax; 
-                addViewedItem(xruler, yruler, zz, MOVETO); 
-                addViewedItem(xruler+xtick, yruler, zz, STROKE);
+                add3Dview(xruler, yruler, zz, MOVETO); 
+                add3Dview(xruler+xtick, yruler, zz, STROKE);
                 String s = U.fwd(zticks[i], 16, nzdigits).trim(); 
                 addStringRight(xruler, yruler, zz, s); 
             }
@@ -627,64 +654,37 @@ public class H2DPanel extends GPanel
     // u=0: panel parallel to x axis; d=dx
     // u=1: panel parallel to y axis; d=dy
     {
-        addXYZO(SETCOLOR + color); 
+        addRaw(0., 0., 0., SETCOLOR+color, QBASE); 
         int v = 1-u; 
-        addViewedItem(x,     y,     -0.5,   MOVETO);
-        addViewedItem(x+v*d, y+u*d, -0.5,   PATHTO); 
-        addViewedItem(x+v*d, y+u*d,   h,    PATHTO); 
-        addViewedItem(x,     y,       h,    PATHTO); 
-        addViewedItem(x,     y,     -0.5,   FILL);
+        add3Dview(x,     y,     -0.5,   MOVETO);
+        add3Dview(x+v*d, y+u*d, -0.5,   PATHTO); 
+        add3Dview(x+v*d, y+u*d,   h,    PATHTO); 
+        add3Dview(x,     y,       h,    PATHTO); 
+        add3Dview(x,     y,     -0.5,   FILL);
     }
 
 
     void addLid(double x, double y, double dx, double dy, double h)
     {
         if (h>-0.5)
-          addXYZO(SETCOLOR + DKGRAY); 
+          addRaw(0., 0., 0., SETCOLOR+DKGRAY, QBASE); 
         else
-          addXYZO(SETCOLOR + LTGRAY); 
-        addViewedItem(x,    y,    h, MOVETO); 
-        addViewedItem(x+dx, y,    h, PATHTO); 
-        addViewedItem(x+dx, y+dy, h, PATHTO); 
-        addViewedItem(x,    y+dy, h, PATHTO); 
-        addViewedItem(x,    y,    h, FILL); 
+          addRaw(0., 0., 0., SETCOLOR+LTGRAY, QBASE); 
+        add3Dview(x,    y,    h, MOVETO); 
+        add3Dview(x+dx, y,    h, PATHTO); 
+        add3Dview(x+dx, y+dy, h, PATHTO); 
+        add3Dview(x,    y+dy, h, PATHTO); 
+        add3Dview(x,    y,    h, FILL); 
     }
 
 
 
 
-    //--------3D artwork methods--------------------------
-
-    void addViewedItem(double[] xyz, int op)
-    {
-        viewelaz(xyz); 
-        addScaledItem(xyz, op); 
-    }
-
-
-    void addViewedItem(double x, double y, double z, int op)
-    {
-        double xyz[] = {x, y, z}; 
-        addViewedItem(xyz, op);
-    }
-
-
-    void viewelaz(double[] xyz)
-    // Puts a labframe point xyz into user's el, az viewframe
-    // Assumes that globals sinaz...cosel have been preset. 
-    // Formulas are for +Z=vertical axis
-    {
-        double horiz = xyz[0]*cosaz - xyz[1]*sinaz;
-        double vert =  xyz[0]*sinel*sinaz + xyz[1]*sinel*cosaz + xyz[2]*cosel;
-        double outof = -xyz[0]*cosel*sinaz - xyz[1]*cosel*cosaz + xyz[2]*sinel;
-        xyz[0] = horiz;
-        xyz[1] = vert;
-        xyz[2] = outof;
-    }
-
-         
+    //--------2D and 3D string methods--------------------------
+    
     void addStringCenter(double x, double y, double z, String s)
-    // Places a string so its center is at [xyz].
+    // Places a string so its center is at [xyz] user coordinates
+    // but the string generator writes in scaled screen base coordinates.
     // charwidth etc are generated locally.
     // Char coordinates are LowerLeftOrigin. 
     {
@@ -708,7 +708,7 @@ public class H2DPanel extends GPanel
         {
              int ic = (int) s.charAt(k) + iFontcode; 
              xyz[0] += scaledW; 
-             addScaledItem(xyz, ic); 
+             add3Dbase(xyz, ic); 
         }
     }
 
@@ -737,7 +737,7 @@ public class H2DPanel extends GPanel
         {
              int ic = (int) s.charAt(k) + iFontcode; 
              xyz[0] += scaledW; 
-             addScaledItem(xyz, ic); 
+             add3Dbase(xyz, ic); 
         }
     }
 }

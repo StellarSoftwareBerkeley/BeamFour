@@ -119,11 +119,6 @@ public class MTFPanel extends GPanel
         return false; 
     } 
 
-    protected void doFinishArt() // replaces abstract "do" method
-    {
-        return; 
-    }
-
     protected void doCursor(int ix, int iy)  // replaces abstract method
     // delivers current cursor coordinates
     {
@@ -167,8 +162,20 @@ public class MTFPanel extends GPanel
         {}
     } 
 
+
+
+
+
     
-    //--------------private methods-------------------
+    //--------------ARTWORK-------------------
+    //--------------ARTWORK-------------------
+    //--------------ARTWORK-------------------
+    
+    private void add2D(double x, double y, int op)  // local shorthand
+    {
+        addScaled(x, y, 0.0, op, QBASE);   // GPanel service
+    }
+    
 
     private void doArt()  
     {
@@ -183,26 +190,27 @@ public class MTFPanel extends GPanel
         double vyoffset = -0.4*scaledH;             // for vert scale 
         double vrhgap = 0.2;                        // LowerLeftOrigin
 
-        ///////////// draw the furniture.  //////////
+        //------draw the furniture--------
+        
+        clearList(QBASE); 
+        addRaw(0., 0., 0., SETWHITEBKG, QBASE);      // unscaled
+        addRaw(0., 0., 0., SETCOLOR+BLACK, QBASE);   // unscaled
+        addRaw(1., 0., 0., SETSOLIDLINE, QBASE);     // unscaled
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);     // unscaled
+                
 
-        clearXYZO();       
-        addXYZO(SETWHITEBKG);
-        addXYZO(SETCOLOR + BLACK); 
-        addXYZO(1.0, SETSOLIDLINE);     // for plot boxes
-        addXYZO(COMMENTRULER);          // advertise the H ruler
-
-        ///////////// the X ruler at Y=0 ////////////////////////
+        //----the X ruler at Y=0----
 
         double yruler = 0.0;
-        addScaledItem(hticks[0], yruler, MOVETO); 
-        addScaledItem(hticks[0], yruler+ytick, PATHTO); 
-        addScaledItem(hticks[0], yruler, PATHTO); 
+        add2D(hticks[0], yruler, MOVETO); 
+        add2D(hticks[0], yruler+ytick, PATHTO); 
+        add2D(hticks[0], yruler, PATHTO); 
         for (int i=1; i<hnticks; i++)
         {
-            addScaledItem(hticks[i], yruler, PATHTO); 
-            addScaledItem(hticks[i], yruler+ytick, PATHTO); 
+            add2D(hticks[i], yruler, PATHTO); 
+            add2D(hticks[i], yruler+ytick, PATHTO); 
             int op = (i < hnticks-1) ? PATHTO : STROKE;  
-            addScaledItem(hticks[i], yruler, op); 
+            add2D(hticks[i], yruler, op); 
         }
 
         // labelling loop...
@@ -217,7 +225,7 @@ public class MTFPanel extends GPanel
             {
                 int ic = (int) s.charAt(k) + iFontcode; 
                 double x = hticks[i] + scaledW*(k-dmid); 
-                addScaledItem(x, yruler+hyoffset, ic);
+                add2D(x, yruler+hyoffset, ic);
             }
         }
 
@@ -228,24 +236,23 @@ public class MTFPanel extends GPanel
         {
             int ic = (int) hst.charAt(k) + iFontcode; 
             double x = uxcenter + scaledW*(k-hnchars/2); 
-            addScaledItem(x, yruler-2.5*scaledH, ic);
+            add2D(x, yruler-2.5*scaledH, ic);
         }
         
 
         //////// v ruler at left /////////////
 
-        addXYZO(COMMENTRULER); 
-
+        addRaw(0., 0., 0., COMMENTRULER, QBASE);  
         double xruler = 0.0; 
-        addScaledItem(xruler, vticks[0], MOVETO); 
-        addScaledItem(xruler+xtick, vticks[0], PATHTO); 
-        addScaledItem(xruler, vticks[0], PATHTO); 
+        add2D(xruler, vticks[0], MOVETO); 
+        add2D(xruler+xtick, vticks[0], PATHTO); 
+        add2D(xruler, vticks[0], PATHTO); 
         for (int i=1; i<vnticks; i++)
         {
-            addScaledItem(xruler, vticks[i],PATHTO); 
-            addScaledItem(xruler+xtick, vticks[i], PATHTO); 
+            add2D(xruler, vticks[i],PATHTO); 
+            add2D(xruler+xtick, vticks[i], PATHTO); 
             int op = (i < vnticks-1) ? PATHTO : STROKE;  
-            addScaledItem(xruler, vticks[i], op); 
+            add2D(xruler, vticks[i], op); 
         }
 
         // labelling loop...
@@ -258,31 +265,31 @@ public class MTFPanel extends GPanel
             {
                 int ic = (int) s.charAt(k) + iFontcode; 
                 double x = xruler + scaledW*(k-nchars-vrhgap); 
-                addScaledItem(x, vticks[i]+vyoffset, ic); // coord = CharCenter.
+                add2D(x, vticks[i]+vyoffset, ic); // coord = CharCenter.
             }
         } 
 
         // title for vertical axis...
-        String vst = "MTF, %";
+        String vst = "%MTF";
         int vnchars = vst.length(); 
         for (int k=0; k<vnchars; k++)
         {
-            int ic = (int) vst.charAt(k); 
+            int ic = (int) vst.charAt(k) + iFontcode; 
             double x = xruler + (k-vnchars-1)*scaledW; 
-            addScaledItem(x, uycenter, ic);   // coord = CharCenter.
+            add2D(x, uycenter, ic);   // coord = CharCenter.
         }
 
         ////// Now plot the histogram....
 
         double dx = freqspan / nplotfreqs; 
-        addScaledItem(0, 0, MOVETO); 
-        addScaledItem(0, dPower[0], PATHTO);     // up
-        addScaledItem(dx, dPower[0], PATHTO);    // and over
+        add2D(0, 0, MOVETO); 
+        add2D(0, dPower[0], PATHTO);     // up
+        add2D(dx, dPower[0], PATHTO);    // and over
         for (int i=1; i<nplotfreqs; i++)
         {
-            addScaledItem(i*dx, dPower[i], PATHTO); 
+            add2D(i*dx, dPower[i], PATHTO); 
             int op = (i < nplotfreqs-1) ? PATHTO : STROKE; 
-            addScaledItem((i+1)*dx, dPower[i], op); 
+            add2D((i+1)*dx, dPower[i], op); 
         }
     }  // end of doArt()
 }
