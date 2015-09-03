@@ -38,11 +38,10 @@ class MEJIF extends EJIF
     public  static String  mglasses[] = new String[MAXMEDIA+1];  
 
 
-    public MEJIF(int x, JMenuItem gjmi1, JMenuItem gjmi2, 
-       boolean toOpen, String gfname, int gmaxrec)
+    public MEJIF(int iXY, String gfname)
     // constructor creates a media editor using EJIF
     {
-        super(2, x, ".MED", gjmi1, gjmi2, toOpen, gfname, gmaxrec); 
+        super(2, iXY, ".MED", gfname, MAXMEDIA); 
         myFpath = gfname; 
     }
 

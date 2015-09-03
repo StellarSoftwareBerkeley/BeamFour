@@ -54,6 +54,7 @@ class Options extends JMenu implements B4constants
 
     public Options(String menuname, JFrame gjf)  /// the constructor
     // Called once at startup to build the options main menu. 
+    // "gjf" is the given JFrame, namely DMF, when DMF creates Options menu.
     {
         super(menuname);  
         owner = gjf; 
@@ -213,7 +214,6 @@ class Options extends JMenu implements B4constants
           });
         this.add(editItem); 
 
-
         JMenuItem graphicsItem = new JMenuItem("Graphics"); 
         graphicsItem.addActionListener(new
           ActionListener()
@@ -224,7 +224,6 @@ class Options extends JMenu implements B4constants
              }
           });
         this.add(graphicsItem); 
-
 
         JMenuItem defRayItem = new JMenuItem("Default Rays"); 
         defRayItem.addActionListener(new
@@ -300,22 +299,42 @@ class Options extends JMenu implements B4constants
 
         this.add(rayMenu); 
 
-
+        // A176 2 August 2015 revised using TinyLookAndFeel.java
+        // TinyLookAndFeel has JInternalFrames and choosable L&Fs
+        // and does not crash under JDK6.  (Crashes under JDK8).
+        // In A180, BoundedDesktopManager() eliminates underreach 
+        // developed in /Java/internalFrames/Test3.java
+        // yet does not crash on minimization with JDK6.
+        // A180 22 August 2015:
+        // Need not inflate under JRT6; minimize is OK all L&Fs.
+        // ^^ Wrong: user reports crash using Jrt6. 
+        // Going to MacOS: must inflate and deny minimization
+        // Going to other: must allow minimization
+        // A182: using UserOption switch for MacOS iconization.
+        // See DMF.inflateDenyIcons().
+        
         JMenu lookMenu = new JMenu("Look & Feel"); // LJ 527
         final UIManager.LookAndFeelInfo[] info = UIManager.getInstalledLookAndFeels();
         for (int i=0; i<info.length; i++)
         {
             final String className = info[i].getClassName();
-            lookMenu.add(new AbstractAction(info[i].getName())
+            final String shortName = info[i].getName(); 
+            JMenuItem jmi = new JMenuItem(shortName); 
+            jmi.addActionListener(new ActionListener()
             {
-                public static final long serialVersionUID = 42L;
                 public void actionPerformed(ActionEvent ae)
                 {
+                    boolean bMac = shortName.equals("Mac OS X"); 
+                    if (bMac)
+                      DMF.inflateIcons(); 
                     try { UIManager.setLookAndFeel(className); }
-                    catch (Exception e2) {}
+                    catch (Exception ex) { }
                     SwingUtilities.updateComponentTreeUI(owner); 
+                    if (!bMac)
+                      DMF.permitIcons(); 
                 }
             }); 
+            lookMenu.add(jmi); 
         }
         this.add(lookMenu); 
     }
@@ -340,8 +359,6 @@ class Options extends JMenu implements B4constants
            DMF.reg.putuo(UO_IO, 0, rms.isSelected() ? "T" : "F"); 
         }
     }
-
-
 
 
     void doLayoutDialog(JFrame frame)
@@ -754,35 +771,8 @@ class Options extends JMenu implements B4constants
 
 
 
-/*************
-    void doRandomDialog(JFrame frame)
-    {
-        // create three LabelDataBoxes, each 6 columns wide...
-        LabelDataBox refresh = new LabelDataBox(UO_RAND, 0, NCHARS); 
-        LabelDataBox tries = new LabelDataBox(UO_RAND, 1, NCHARS); 
-        LabelDataBox succ = new LabelDataBox(UO_RAND, 2, NCHARS); 
-        BorVertRadioBox xyz = new BorVertRadioBox("X0 Y0 Z0", UO_RAND, 3, 2); 
-        BorVertRadioBox uvw = new BorVertRadioBox("U0 V0 W0", UO_RAND, 5, 2); 
 
-        int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {refresh, tries, succ, xyz, uvw}, 
-           "Random Ray Options", 
-           JOptionPane.OK_CANCEL_OPTION, 
-           JOptionPane.PLAIN_MESSAGE,
-           null, null, null); 
 
-        if (result == JOptionPane.OK_OPTION)
-        {
-            DMF.reg.putuo(UO_RAND, 0, refresh.getText()); 
-            DMF.reg.putuo(UO_RAND, 1, tries.getText()); 
-            DMF.reg.putuo(UO_RAND, 2, succ.getText()); 
-            for (int i=0; i<2; i++)
-              DMF.reg.putuo(UO_RAND, 3+i, xyz.isSelected(i) ? "T" : "F"); 
-            for (int i=0; i<2; i++)
-              DMF.reg.putuo(UO_RAND, 5+i, uvw.isSelected(i) ? "T" : "F");               
-        }
-    }
-*****************/
 
 
     void doRandomDialog(JFrame frame)
@@ -807,9 +797,12 @@ class Options extends JMenu implements B4constants
 
         if (result == JOptionPane.OK_OPTION)
         {
-            DMF.reg.putuo(UO_RAND, 0, refresh.getText()); 
-            DMF.reg.putuo(UO_RAND, 1, tries.getText()); 
-            DMF.reg.putuo(UO_RAND, 2, succ.getText()); 
+            String s = refresh.getText(); 
+            DMF.reg.putuo(UO_RAND, 0, sNumber(s, MAXBUNCH)); 
+            s = tries.getText(); 
+            DMF.reg.putuo(UO_RAND, 1, sNumber(s, 999999999)); 
+            s = succ.getText(); 
+            DMF.reg.putuo(UO_RAND, 2, sNumber(s, 999999999)); 
             for (int i=0; i<2; i++)   // two buttons
               DMF.reg.putuo(UO_RAND, 3+i, xyz.isSelected(i) ? "T" : "F"); 
             for (int i=0; i<2; i++)   // two buttons
@@ -820,7 +813,16 @@ class Options extends JMenu implements B4constants
         }
     }
     
-    
+    String sNumber(String s, int maxval)
+    // filters out garbage strings, restricts answer to range 1 ... maxval
+    {
+        int i = 1; 
+        try {i = Integer.parseInt(s.trim());}
+        catch (NumberFormatException nfe) {i = 1;}
+        i = Math.max(1, Math.min(i, maxval)); 
+        return ""+i; 
+    }
+        
 
 
     void doCadDialog(JFrame frame)
@@ -850,77 +852,44 @@ class Options extends JMenu implements B4constants
     }
 
 
-
-
     void doStartDialog(JFrame frame)
     // Includes option to automatically use most recent file set, A112 onward. 
+    // DMF saves most recent directory for File::OPEN.
+    // Changing the MacOS icon permission should update all JIFs
+    // using DMF's inflateIcons() and permitIcons() methods
     {
-        LabelDataBox optBox  = new LabelDataBox(UO_START, 0, 55); 
-        LabelDataBox rayBox  = new LabelDataBox(UO_START, 1, 55); 
-        LabelDataBox medBox  = new LabelDataBox(UO_START, 2, 55); 
-        LabelBitBox  autoBox = new LabelBitBox(UO_START, 3);
-        Object[] buttonNames = {"                         OK                       ", 
-                                "                       Cancel                     "}; 
-
+        boolean bPrevIcon       = "T".equals(DMF.reg.getuo(UO_START, 9)); 
+        BorVertRadioBox opt     = new BorVertRadioBox("Optics", UO_START, 0, 2); 
+        BorVertRadioBox ray     = new BorVertRadioBox("Rays", UO_START, 2, 2); 
+        BorVertRadioBox med     = new BorVertRadioBox("Media", UO_START, 4, 2);   
+        BorVertRadioBox fo      = new BorVertRadioBox("File Open", UO_START,6,2);  
+        BorVertRadioBox icon    = new BorVertRadioBox("Mac OS L&F", UO_START,9,2);
         int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {optBox, rayBox, medBox, autoBox}, 
+           new Object[] {opt, ray, med, fo, icon}, 
            "Startup File Options", 
            JOptionPane.OK_CANCEL_OPTION, 
-           // plain because QUESTION_MESSAGE is an exclamation on the Mac.
            JOptionPane.PLAIN_MESSAGE,
-           null,
-           buttonNames, 
-           buttonNames[1]); 
+           null, null, null);    
 
-        String  sOpt  = "";
-        String  sRay  = ""; 
-        String  sMed  = ""; 
-        boolean bAuto = autoBox.isSelected(); 
-            
-        if (bAuto)  // use current editor filenames
+        if (result == JOptionPane.OK_OPTION)
         {
-            if (DMF.oejif != null)
-              sOpt = DMF.oejif.getFpath(); 
-            else
-              sOpt = ""; 
-
-            if (DMF.rejif != null)
-              sRay = DMF.rejif.getFpath(); 
-            else
-              sRay = ""; 
-
-            if (DMF.mejif != null)
-              sMed = DMF.mejif.getFpath(); 
-            else
-              sMed = ""; 
-        }
-
-        else  // use LabelDataBox names
-        {
-            sOpt = optBox.getText(); 
-            sRay = rayBox.getText(); 
-            sMed = medBox.getText(); 
-        }
-
-        if (result == 0)  // clean and store them 
-        {
-            if ((sOpt.length()>0) && !sOpt.toUpperCase().endsWith(".OPT"))
-              sOpt = sOpt + ".OPT"; 
-            DMF.reg.putuo(UO_START, 0, sOpt); 
-
-            if ((sRay.length()>0) && !sRay.toUpperCase().endsWith(".RAY"))
-              sRay = sRay + ".RAY"; 
-            DMF.reg.putuo(UO_START, 1, sRay); 
-
-            if ((sMed.length()>0) && !sMed.toUpperCase().endsWith(".MED"))
-              sMed = sMed + ".MED"; 
-            DMF.reg.putuo(UO_START, 2, sMed); 
-            
-            DMF.reg.putuo(UO_START, 3,  autoBox.isSelected() ? "T" : "F"); 
+            for (int i=0; i<2; i++)
+              DMF.reg.putuo(UO_START, i, opt.isSelected(i) ? "T" : "F"); 
+            for (int i=0; i<2; i++)
+              DMF.reg.putuo(UO_START, i+2, ray.isSelected(i) ? "T" : "F"); 
+            for (int i=0; i<2; i++)
+              DMF.reg.putuo(UO_START, i+4, med.isSelected(i) ? "T" : "F"); 
+            for (int i=0; i<2; i++)
+              DMF.reg.putuo(UO_START, i+6, fo.isSelected(i) ? "T" : "F"); 
+            for (int i=0; i<2; i++)
+              DMF.reg.putuo(UO_START, i+9, icon.isSelected(i) ? "T" : "F"); 
+            boolean bThisIcon = "T".equals(DMF.reg.getuo(UO_START, 9)); 
+            if (bThisIcon && !bPrevIcon)
+              DMF.permitIcons(); 
+            if (!bThisIcon && bPrevIcon)
+              DMF.inflateIcons(); 
         }
     }
-
-
 
 
 
@@ -2009,7 +1978,7 @@ class DebugBox extends JPanel implements B4constants
 
 
 class BorVertRadioBox extends JPanel implements B4constants 
-// helper for radio button groups
+// helper for radio button groups; im is index of initial button.
 {
     public static final long serialVersionUID = 42L;
 
@@ -2081,14 +2050,14 @@ class BorVertRadioField extends JPanel implements B4constants
         RadioRepair.fixemup(ig, im, nbuttons); 
 
         int extra = title.length() > 0 ? 45 : 35; 
-        setPreferredSize(new Dimension(190, 24*nbuttons+extra)); 
+        setPreferredSize(new Dimension(290, 24*nbuttons+extra)); 
         setMaximumSize(getPreferredSize()); 
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
         bg = new ButtonGroup(); 
         for (int i=0; i<nbuttons; i++)
         {
             JPanel jp = new JPanel(); 
-            jp.setPreferredSize(new Dimension(180, 24)); 
+            jp.setPreferredSize(new Dimension(280, 24)); 
             jp.setMaximumSize(jp.getPreferredSize()); 
             jp.setLayout(new BoxLayout(jp, BoxLayout.X_AXIS)); 
             jp.add(Box.createGlue()); // horizontal spring
@@ -2104,25 +2073,17 @@ class BorVertRadioField extends JPanel implements B4constants
         //----now add the labelled text field--------
         JPanel jp = new JPanel(); 
         jp.setLayout(new BoxLayout(jp, BoxLayout.X_AXIS)); 
-        jp.setPreferredSize(new Dimension(180, 25));
+        jp.setPreferredSize(new Dimension(280, 25));
         jp.setMaximumSize(jp.getPreferredSize()); 
         
         JLabel jl = new JLabel("   "+UO[ig][imm+nbuttons][0]); 
         jl.setPreferredSize(new Dimension(240, 24)); 
         jl.setMaximumSize(jl.getPreferredSize()); 
 
-        // jl.setBorder(BorderFactory.createCompoundBorder(           // debugging
-        //            BorderFactory.createLineBorder(Color.red),
-        //            jl.getBorder()));
-
         jt = new JTextField(DMF.reg.getuo(igg, imm+nbuttons), 8);
         jt.setPreferredSize(new Dimension(20, 24)); 
         jt.setMaximumSize(jt.getPreferredSize());  
         jt.setActionCommand(UO[ig][imm+nbuttons][0]);
-
-        // jt.setBorder(BorderFactory.createCompoundBorder(           // debugging
-        //            BorderFactory.createLineBorder(Color.red),
-        //            jt.getBorder()));
 
         jp.add(jl); 
         // jp.add(Box.createRigidArea(new Dimension(5,0))); // bit of space
@@ -2145,6 +2106,79 @@ class BorVertRadioField extends JPanel implements B4constants
 }
 
 
+/******* abandoned *********
+
+class BorVertRadioFileOpen extends JPanel implements B4constants 
+// helper for radio button group with a text field. 
+// see Options::Startup:FileOpen
+{
+    public static final long serialVersionUID = 42L;
+
+    private ButtonGroup bg; 
+    private JTextField jt; 
+    int igg, imm; 
+    int nbuttons; 
+
+    public BorVertRadioFileOpen(String title, int ig, int im, int gbuttons, String set)
+    {
+        super(); 
+        nbuttons = gbuttons; 
+        igg = ig;
+        imm = im; 
+        RadioRepair.fixemup(ig, im, nbuttons); 
+
+        int extra = title.length() > 0 ? 55 : 45; 
+        setPreferredSize(new Dimension(290, 24*nbuttons+extra)); 
+        setMaximumSize(getPreferredSize()); 
+        setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+        bg = new ButtonGroup(); 
+        for (int i=0; i<nbuttons; i++)
+        {
+            JPanel jp = new JPanel(); 
+            jp.setPreferredSize(new Dimension(280, 24)); 
+            jp.setMaximumSize(jp.getPreferredSize()); 
+            jp.setLayout(new BoxLayout(jp, BoxLayout.X_AXIS)); 
+            jp.add(Box.createGlue()); // horizontal spring
+            boolean chosen = "T".equals(DMF.reg.getuo(igg,imm+i)); 
+            JRadioButton jrb = new JRadioButton(UO[igg][imm+i][0], chosen);
+            jrb.setActionCommand(UO[igg][imm+i][0]); 
+            jrb.setHorizontalTextPosition(AbstractButton.LEFT); 
+            jp.add(jrb); 
+            this.add(jp); 
+            bg.add(jrb); 
+        }
+        
+        //----now add the UNLABELLED text field--------
+        // JPanel jp = new JPanel(); 
+        // jp.setLayout(new BoxLayout(jp, BoxLayout.X_AXIS)); 
+        // jp.setPreferredSize(new Dimension(280, 25));
+        // jp.setMaximumSize(jp.getPreferredSize()); 
+        
+        jt = new JTextField(DMF.reg.getuo(igg, imm+nbuttons), 8);
+        jt.setText(set); 
+        jt.setPreferredSize(new Dimension(280, 24)); 
+        // jt.setMaximumSize(jt.getPreferredSize());  
+        jt.setActionCommand(UO[ig][imm+nbuttons][0]);
+        // jp.add(jt); 
+        // this.add(jp); 
+        this.add(jt); 
+        
+        this.setBorder(BorderFactory.createTitledBorder(title));
+    }
+
+    public boolean isSelected(int i)  // i=0, 1, ...
+    {
+        String s = bg.getSelection().getActionCommand(); 
+        return UO[igg][imm+i][0].equals(s); 
+    }
+    
+    public String getText()  // pulls the text out of JTextArea.
+    {
+        return (jt==null) ? "" : jt.getText(); 
+    }
+}
+
+************************/
 
 
 

@@ -36,7 +36,10 @@ public class GJIF extends BJIF implements B4constants
     private   JMenuItem myjmi;     // remember the JMenuItem for ungraying
     private   GPanel myGPanel;       // The panel that is contained herein. 
 
-
+    boolean bExitOK(Component c)
+    {
+        return true;
+    }
 
     public GJIF(int gtype, String gname, JMenuItem gjmi)
     // This is called by DMF with the above three data. 

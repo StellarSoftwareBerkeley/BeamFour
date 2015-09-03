@@ -73,6 +73,11 @@ class EPanel extends JPanel implements B4constants, MouseWheelListener
     public EPanel(EJIF ejif) // constructor
     { 
         // no need to initialize base class JPanel "super()"
+        
+        ///// testing suggestion from StackOverflow....
+        ///// this.setDoubleBuffered(false); 
+        ///// does it work?  Nope.
+        
         myEJIF = ejif;   
         vsbReference = null; 
         clearTable(); 
@@ -124,10 +129,6 @@ class EPanel extends JPanel implements B4constants, MouseWheelListener
         iOff = 0; 
         vsbReference = myEJIF.createVSB(); 
         jOff = 0; 
-
-
-
-
         getAllLineLengths(); 
         myEJIF.setDirty(false);
     }  //--------end constructor---------------
@@ -488,12 +489,15 @@ class EPanel extends JPanel implements B4constants, MouseWheelListener
 
     public void vLoadSkeleton()
     {
+    
+        int ifw = U.parseInt(DMF.reg.getuo(UO_EDIT, 3)); 
+        ifw = Math.max(6, Math.min(100, ifw)); 
         DMF.nEdits++; 
         clearTable(); 
-        for (int i=0; i<60; i++)
+        for (int i=0; i<100; i++)
           charTable[2][i] = '-'; 
         for (int j=2; j<15; j++)
-          for (int i=10; i<60; i+=10)
+          for (int i=ifw; i<100; i+=ifw)
             charTable[j][i] = ':';
         iMouse = jMouse = jDown = iCaret = jCaret = iOff = jOff = 0; 
         jDrag = -1; 

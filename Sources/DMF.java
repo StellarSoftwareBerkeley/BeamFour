@@ -13,7 +13,7 @@ import javax.swing.event.*;     // for MenuEvents and InternalFrameAdapter
 import javax.swing.text.*;      // for BadLocationException
 import java.awt.datatransfer.*; // for Drag-n-Drop
 import java.awt.dnd.*;          // for Drag-n-Drop
-import javax.swing.filechooser.FileFilter;  // for screen dump.
+import javax.swing.filechooser.FileNameExtensionFilter; 
 
 @SuppressWarnings("serial")
 
@@ -23,9 +23,9 @@ import javax.swing.filechooser.FileFilter;  // for screen dump.
   *
   * Basic idea is: Horstmann & Cornell vol.2. p.539
   *   1. use a plain JFrame for the application
-  *   2. set its contentpane to a JDesktop pane.
+  *   2. set its contentpane to a JDesktop pane "jdp"
   *   3. build JInternalFrame window elements.
-  *   4. etc etc
+  *   4. The jdp.add(myJIF)s are line 280, 291, 302, .. 1140.
   *   5. setSelected() can be vetoed! need to catch
   *     and process the PropertyVetoException...
   *
@@ -62,12 +62,39 @@ import javax.swing.filechooser.FileFilter;  // for screen dump.
   * A144: fixing intermittent File::Open
   * A157: added About...Java Version
   * A164: added About...compiler version
-  *  
-  *  @author M.Lampton (c) 2004 STELLAR SOFTWARE all rights reserved.
+  * A175: eliminating all mnemonics and simplifying accelerators
+  * A176: exploring RecentFile loads. One problem is that FileMenuListener
+  *  attemps to handle all FileMenuItems, and it is difficult to disentangle the
+  *  MainMenuItems from the SubMenuItems.  Plan on eliminating FMIListener,
+  *  replacing with local calls to loadOPT(), loadRAY(), loadMED(),
+  *  and perhaps newOPT(), newRAY(), and newMED().
+  *  Doing the Recent submenus in graying() which is dynamic.
+  *  EJIF need not do ungraying and does not need gjmi1, gjmi2.
+  *
+  * A176: removed LimitingDesktopMgr() from JDesktopPane; it causes a
+  *  crash when Mac OS window is iconified.  Line 198.
+  *
+  * A179: simplified Startup Files options: none or most recent.
+  *  Adopting single project folder for all File:Open chooser starts.
+  *  Three choices for project folder: UserHome, MostRecent, or Specified.
+  *  One text-edit box that always shows MostRecent unless Specified is true.
+  *  Accomplish this via a "setProject" "getProject" method pair;
+  *  setProject fills in sProject field & dataBox unless Specified is True;
+  *  getProject produces either UserHome, or sProject, or Specified, depending on button.
+  *
+  * A180, A181: reinstalling a BoundingDesktopMgr() into JDesktopPane;
+  *  it eliminates underscooting at the MenuBar, and does not crash MacOS "minimize"
+  *  because BJIF constructor with MacOS L&F forbids minimize on new windows,
+  *  and Options L&F inflates & forbids "minimize" going to MacOS L&F,
+  *  and Options L&F allows "minimize" going to any other L&F. 
+  *
+  * A183: improved three-button exit logic.
+  *
+  *  @author M.Lampton (c) 2004-2015 STELLAR SOFTWARE all rights reserved.
   */
 public class DMF extends JFrame implements B4constants
 {
-    public static int iLast = 10; 
+    public static int iXY = 10;  
 
     public static JFrame dmf;           // allows messages, e.g. setTitle()
     public static JDesktopPane jdp;     // for WhichEditorInFront...
@@ -78,7 +105,6 @@ public class DMF extends JFrame implements B4constants
     public static REJIF rejif;
     public static MEJIF mejif; 
     public static int nEdits;           // increments for each edit.
-    // public static int iError = 0;       // 0=rayFault; 1=AIOOBE; 2=surfProfile.
     
     public static int giFlags[] = new int[NFLAGS];
     public static String sAutoErr = ""; // RT13 reports to AutoAdj, if necessary
@@ -86,29 +112,33 @@ public class DMF extends JFrame implements B4constants
     public static boolean bHostActive = true;  
     public static boolean bRequestWriteImage = false; // see BJIF
     public static boolean bRayGenOK = true; 
-    public static boolean bAutoBusy = false;          // forbid parsing when AutoAdj is running
+    public static boolean bAutoBusy = false;    // forbid parsing when AutoAdj is running
 
     private static int iWindowOffset = 20;      // pixels
     private static int iWindowOffsetMax = 200;  // pixels
 
     static final String enames[] = {"Optics", "Rays", "Media"};
     static final String extensions[] = {"OPT", "RAY", "MED"}; 
-    
-    public static String sMostRecentFilePathOpt = "";  // for auto startup
-    public static String sMostRecentFilePathRay = "";  // for auto startup
-    public static String sMostRecentFilePathMed = "";  // for auto startup
+
 
     //-----file menu setup---------------
 
-    static final int NEWOPT=0, NEWRAY=1, NEWMED=2, OPENOPT=3, 
-       OPENRAY=4, OPENMED=5, SAVE=6, SAVEAS=7, QUICKPNG=8,
-       WRITECAD=9, WRITEHISTO=10, PRINT=11, QUIT=12, NFITEMS=13; 
+    static final int NEWOPT=0, NEWRAY=1, NEWMED=2,  
+                     OPENOPT=3, OPENRAY=4, OPENMED=5, 
+                     SAVE=6, SAVEAS=7, 
+                     QUICKPNG=8, WRITECAD=9, WRITEHISTO=10, 
+                     PRINT=11, QUIT=12, NFITEMS=13; 
 
-    static final String fileItemStr[] = {"NewOptics", "NewRays", 
-      "NewMedia",  "OpenOptics", "OpenRays", "OpenMedia", "SaveTable", 
-      "SaveTableAs", "QuickPNG", "WriteCAD", "WriteHisto", "Print/PDF", "Quit"}; 
+    static final String fileItemStr[] = 
+       {"NewOptics", "NewRays", "NewMedia",  
+       "OpenOptics", "OpenRays", "OpenMedia", 
+       "SaveTable", "SaveTableAs", 
+       "QuickPNG", "WriteCAD", "WriteHisto", 
+       "Print/PDF", "Quit"}; 
 
     static JMenuItem fileMenuItem[] = new JMenuItem[NFITEMS]; 
+    
+    static JMenu jmRO, jmRR, jmRM;  // public for graying at line 855
 
     //----run menu setup---------------------
 
@@ -141,18 +171,36 @@ public class DMF extends JFrame implements B4constants
     static private String sInitialDir;
     static public  String sCurrentDir; 
     static private String sWorkingTitle; 
-
-
+    
+    static public  String sUserHome = "";    // for defaults
+    
+    //------about the Java RunTime environment--------------
+    
+    static public int    iJRT;   // typically 6, 7, 8...
+    static public String sJRT;   // typically "JRT6", JRT7", ...
+    static public String sLong;  // typically "1.6.0_65"
+    
 
     public DMF() //----constructor--------
     {
-        super(); 
-        dmf = this;                // save a reference to this frame
+        super();                          // does nothing without args
+        dmf = this;                       // save a reference to this frame
+                
+        sLong = java.lang.System.getProperty("java.version"); 
+        char cJRT = U.getCharAt(sLong, 2);  
+        iJRT = java.lang.Character.getNumericValue(cJRT); 
+        sJRT = "JRT" + cJRT;  
+                
         sInitialDir = System.getProperty("user.dir");  
         sCurrentDir = sInitialDir;        
-        reg = new Registry(sInitialDir);   
-
-        sWorkingTitle = PRODUCT; 
+        reg = new Registry(sInitialDir);  // create and load registry 
+        sUserHome = System.getProperty("user.home"); 
+        
+        //---fix up an absentee project path----
+        if (reg.getuo(UO_START, 8).length() < 2)
+          reg.putuo(UO_START, 8, sUserHome); 
+        
+        sWorkingTitle = PRODUCT;   // defined as BEAM FOUR in B4constants.java
         setTitle(sWorkingTitle);
         setBackground(LBLUE);      // briefly, then jdp takes over.
         nEdits = 0; 
@@ -160,17 +208,18 @@ public class DMF extends JFrame implements B4constants
         //----------set initial AutoBusy flag-------------------
 
         bAutoBusy = false; // not busy allows blinker parsing 
-          
-        //-----------prepare menus----------------
+
+        //-----------build the menus and menubar----------------
         
-        vManageMenus(); 
+        vBuildMenus(); 
 
         //----prepare desktop: Horstmann & Cornell Vol.2. p.539--------
         //----and http://www.java2s.com/Code/Java/Swing-JFC------------
         
         jdp = new JDesktopPane(); 
-        // deskman = jdp.getDesktopManager();  
-        jdp.setDesktopManager(new LimitingDesktopMgr()); 
+        // jdp.setDesktopManager(new LimitingDesktopMgr());  // eliminated in A176.
+        // needed to eliminate underscoot even in JDK6 + JRT6.
+        jdp.setDesktopManager(new HeadroomDesktopManager()); // installed A180, 184.
         
         jdp.setDragMode(JDesktopPane.OUTLINE_DRAG_MODE); 
         jdp.setBackground(LBLUE);
@@ -213,15 +262,65 @@ public class DMF extends JFrame implements B4constants
     } //---end of the constructor---------------- 
 
 
-    //--------other public methods-------------------
 
+
+
+    //--------other methods-------------------
+    
+    public static void inflateIcons()
+    // public static, for Options L&F menu line 320 of A180.
+    // Called when going to MacOS L&F. 
+    // (For new JIFs, see BJIF.)
+    // Resuscitates all iconized JIFs.  
+    // Use this prior to L&F switching to MacOS, because a bug
+    // in MacOS L&F makes all foreign icons vanish.
+    // Also (A182) iconization permission is a UserOption. 
+    {   
+        boolean bMacIconOK = "T".equals(reg.getuo(UO_START, 9)); 
+        JInternalFrame[] jifs = jdp.getAllFrames(); 
+        for (int i=0; i<jifs.length; i++)
+        {
+            if (jifs[i].isIcon())
+            {
+                try {jifs[i].setIcon(false);}
+                catch (Exception x) {}
+            }
+            jifs[i].setIconifiable(bMacIconOK);  
+        } 
+    }
+
+    public static void permitIcons()
+    // public static, for Options L&F menu line 332 of A181.
+    // Re-enables all JIF iconize buttons.
+    // Use this after switching out of MacOS L&F, or selecting Icons=OK.
+    {   
+        JInternalFrame[] jifs = jdp.getAllFrames(); 
+        for (int i=0; i<jifs.length; i++)
+        {
+            jifs[i].setIconifiable(true);  
+        } 
+    }
+    
+    
+    private static void setProject(String path)
+    {
+        reg.putuo(UO_START, 8, path); 
+    }
+    
+    private static String getFileOpenPath()
+    // returns appropriate path for File:Open
+    {
+        if ("T".equals(reg.getuo(UO_START, 7)))  // 7 = most recent path button
+          return reg.getuo(UO_START, 8);         // 8 = invisible recent path stash
+        return sUserHome; 
+    }
+    
+    
     public static JFrame getJFrame()
     {
         return dmf; 
     }
    
-    
-
     public static double getOsize()
     // called by RT13 for numerical solver hint.
     // called by RT13 for vExtend() method.
@@ -239,11 +338,11 @@ public class DMF extends JFrame implements B4constants
     public void vTryLoadDropFile(String fPathNameExt)
     //----callback from DropTargetListener-------
     {
-        if (fPathNameExt.length() < 5)
+        if (fPathNameExt.length() < MINFILENAME)
         {
             return;
         }
-        if (!bFileReadCheck(fPathNameExt))
+        if (!bFileNameReadCheck(fPathNameExt))
         {
             return;
         }
@@ -251,38 +350,34 @@ public class DMF extends JFrame implements B4constants
                              
         if (ext.equals("opt") && (oejif == null))
         {
-            oejif = new OEJIF(iLast, fileMenuItem[0], fileMenuItem[3], 
-                              true, fPathNameExt, MAXSURFS); 
-            sMostRecentFilePathOpt = fPathNameExt; 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
+            setProject(U.getOnlyPath(fPathNameExt)); 
+            oejif = new OEJIF(iXY, fPathNameExt); 
+            iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
             jdp.add(oejif); 
             oejif.setVisible(true);
             oejif.toFront(); 
-            repaint();  // unnecessary?
+            addRecent(0, fPathNameExt); 
         }
         else if (ext.equals("ray") && (rejif == null))
         {
-            rejif = new REJIF(iLast, fileMenuItem[1], fileMenuItem[4], 
-                              true, fPathNameExt, MAXRAYS); 
-            sMostRecentFilePathRay = fPathNameExt; 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
+            setProject(U.getOnlyPath(fPathNameExt)); 
+            rejif = new REJIF(iXY, fPathNameExt); 
+            iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
             jdp.add(rejif); 
             rejif.setVisible(true);
             rejif.toFront(); 
-            repaint();  // unnecessary?
+            addRecent(1, fPathNameExt); 
         }
         else if (ext.equals("med") && (mejif == null))
         {
-            mejif = new MEJIF(iLast, fileMenuItem[2], fileMenuItem[5], 
-                              true, fPathNameExt, MAXMEDIA); 
-            sMostRecentFilePathMed = fPathNameExt; 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
+            setProject(U.getOnlyPath(fPathNameExt)); 
+            mejif = new MEJIF(iXY, fPathNameExt);             
+            iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
             jdp.add(mejif); 
             mejif.setVisible(true);
             mejif.toFront(); 
-            repaint();  // unnecessary?
+            addRecent(2, fPathNameExt); 
         }
-        // vMasterParse(true); now handled by BJIF
     }
 
 
@@ -290,27 +385,50 @@ public class DMF extends JFrame implements B4constants
 
     //-------------private methods--------------------
     
-    private boolean bFileReadCheck(String fname)
+    private boolean bFileNameReadCheck(String fname)
+    // pre-tests a filename before creating an EJIF instance
     {
-       File f = new File(fname); 
-       if (f.isFile() && f.canRead())
-       {
-           try  // try reading one line of it
-           {
-              FileReader fr = new FileReader(f); 
-              BufferedReader br = new BufferedReader(fr); 
-              String s;
-              if ((s = br.readLine()) != null)
-                return true; 
-           }
-           catch (FileNotFoundException e) {}
-           catch (IOException ioe) {}
-        }
-        return false; 
+        if (fname.length() < MINFILENAME)
+          return false; 
+        File f = new File(fname); 
+        return bVerifyFile(f); 
     }
+        
 
+    public static boolean bVerifyFile(File f)
+    {
+        if ((f == null) || !f.exists() || !f.canRead())
+        {
+            return false; 
+        }
 
-    private void vManageMenus()
+        int nlines=0, nchars=0; 
+        try
+        {
+            FileReader fr = new FileReader(f);
+            BufferedReader br = new BufferedReader(fr); 
+            String record; 
+            while ((record = br.readLine()) != null)
+            {
+                nlines++; 
+                nchars += record.length(); 
+            }
+        }
+        catch (Exception e)
+        {
+            return false; 
+        }
+        if ((nlines < 2) || (nchars < 2))
+        {
+            return false; 
+        }
+        return true;
+    }
+    
+    
+    private void vBuildMenus()
+    // assumes that sTenRecent[][] has been loaded.
+    // Called only at startup.
     {
         fmiListener = new FMIlistener(); 
         emiListener = new EMIListener();
@@ -319,45 +437,55 @@ public class DMF extends JFrame implements B4constants
         //------------build the file menu---------------------
 
         JMenu fileMenu = new JMenu("File");
+        
         fileMenu.setMnemonic('F');
         fileMenu.add(fileMenuItem[NEWOPT] = 
-           makeItem(fileItemStr[NEWOPT], fmiListener, 0, 0));
+           makeItem(fileItemStr[NEWOPT], fmiListener, NULLCHAR));  // NULLCHAR means no accelerator
         fileMenu.add(fileMenuItem[NEWRAY] = 
-           makeItem(fileItemStr[NEWRAY], fmiListener, 0, 0)); 
+           makeItem(fileItemStr[NEWRAY], fmiListener, NULLCHAR)); 
         fileMenu.add(fileMenuItem[NEWMED] = 
-           makeItem(fileItemStr[NEWMED], fmiListener, 0, 0));
+           makeItem(fileItemStr[NEWMED], fmiListener, NULLCHAR));
 
         fileMenu.addSeparator(); 
 
         fileMenu.add(fileMenuItem[OPENOPT] = 
-           makeItem(fileItemStr[OPENOPT], fmiListener, 'O', KeyEvent.VK_O));
+           makeItem(fileItemStr[OPENOPT], fmiListener, NULLCHAR));
         fileMenu.add(fileMenuItem[OPENRAY] = 
-           makeItem(fileItemStr[OPENRAY], fmiListener, 'R', KeyEvent.VK_R)); 
+           makeItem(fileItemStr[OPENRAY], fmiListener, NULLCHAR)); 
         fileMenu.add(fileMenuItem[OPENMED] = 
-           makeItem(fileItemStr[OPENMED], fmiListener, 'M', KeyEvent.VK_M));
+           makeItem(fileItemStr[OPENMED], fmiListener, NULLCHAR));
 
+        fileMenu.addSeparator(); 
+        
+        jmRO = new JMenu("Recent Optics Files");  // public declaration for dynamic graying
+        fileMenu.add(jmRO); 
+        jmRR = new JMenu("Recent Ray Files");     // public declaration for dynamic graying  
+        fileMenu.add(jmRR); 
+        jmRM = new JMenu("Recent Media Files");   // public declaration for dynamic graying
+        fileMenu.add(jmRM); 
+        
         fileMenu.addSeparator(); 
 
         fileMenu.add(fileMenuItem[SAVE] = 
-           makeItem(fileItemStr[SAVE], fmiListener, 'S', KeyEvent.VK_S));
+           makeItem(fileItemStr[SAVE], fmiListener, 'S'));  // allows Cmd S to save
         fileMenu.add(fileMenuItem[SAVEAS] = 
-           makeItem(fileItemStr[SAVEAS], fmiListener, 0, 0));
+           makeItem(fileItemStr[SAVEAS], fmiListener, NULLCHAR));
 
         fileMenu.addSeparator(); 
         
         fileMenu.add(fileMenuItem[QUICKPNG] = 
-           makeItem(fileItemStr[QUICKPNG], fmiListener, 'Q', 0)); 
+           makeItem(fileItemStr[QUICKPNG], fmiListener, NULLCHAR)); 
         fileMenu.add(fileMenuItem[WRITECAD] = 
-           makeItem(fileItemStr[WRITECAD], fmiListener, 'C', 0)); 
+           makeItem(fileItemStr[WRITECAD], fmiListener, NULLCHAR)); 
         fileMenu.add(fileMenuItem[WRITEHISTO] = 
-           makeItem(fileItemStr[WRITEHISTO], fmiListener, 0, 0)); 
+           makeItem(fileItemStr[WRITEHISTO], fmiListener, NULLCHAR)); 
         fileMenu.add(fileMenuItem[PRINT] = 
-           makeItem(fileItemStr[PRINT], fmiListener, 0, 0)); 
+           makeItem(fileItemStr[PRINT], fmiListener, NULLCHAR)); 
 
         fileMenu.addSeparator(); 
 
         fileMenu.add(fileMenuItem[QUIT] = 
-           makeItem(fileItemStr[QUIT], fmiListener, 'X', 0));
+           makeItem(fileItemStr[QUIT], fmiListener, NULLCHAR));
         fileMenu.addMenuListener(fileGrayingListener);    // see below...
         fileMenu.addMenuListener(blinkerBlocker);         // see below...
 
@@ -365,14 +493,14 @@ public class DMF extends JFrame implements B4constants
 
         JMenu editMenu = new JMenu("Edit");
         editMenu.setMnemonic('E');
-        editMenu.add(cutMenuItem  = makeItem("Cut", emiListener, 'T', KeyEvent.VK_X));
-        editMenu.add(copyMenuItem = makeItem("Copy", emiListener, 'C', KeyEvent.VK_C));
-        editMenu.add(pasteMenuItem = makeItem("Paste", emiListener, 'P', KeyEvent.VK_V));
-        editMenu.add(deleteMenuItem = makeItem("Delete", emiListener, 'D', KeyEvent.VK_D)); 
+        editMenu.add(cutMenuItem  = makeItem("Cut", emiListener, 'X'));
+        editMenu.add(copyMenuItem = makeItem("Copy", emiListener, 'C'));
+        editMenu.add(pasteMenuItem = makeItem("Paste", emiListener, 'V'));
+        editMenu.add(deleteMenuItem = makeItem("Delete", emiListener, 'D')); 
 
         editMenu.addSeparator(); 
 
-        editMenu.add(selectAllMenuItem = makeItem("SelectAll", emiListener, 'A',KeyEvent.VK_A));
+        editMenu.add(selectAllMenuItem = makeItem("SelectAll", emiListener, 'A'));
         editMenu.addMenuListener(editGrayingListener);  // see below... 
         editMenu.addMenuListener(blinkerBlocker);       // see below...
 
@@ -381,7 +509,7 @@ public class DMF extends JFrame implements B4constants
         JMenu runMenu = new JMenu("Run"); 
         runMenu.setMnemonic('R'); 
         for (int i=0; i<RM_NITEMS; i++)
-          runMenu.add(runMenuItem[i] = makeItem(runItemStr[i], rmiListener, 0, 0)); 
+          runMenu.add(runMenuItem[i] = makeItem(runItemStr[i], rmiListener, NULLCHAR)); 
         runMenu.addMenuListener(runGrayingListener); // see below; drives parser
         runMenu.addMenuListener(blinkerBlocker);     // see below...
 
@@ -491,11 +619,17 @@ public class DMF extends JFrame implements B4constants
         {
             public void actionPerformed(ActionEvent ae)
             {
-                String sAbout = sWorkingTitle+'\n'+RELEASE+'\n'+COPYRIGHT+'\n'+COMPILER;
-                String sVersion = java.lang.System.getProperty("java.version"); 
-                sVersion = getNumber(sVersion); 
-                sAbout += "\nJava Runtime ="+sVersion; 
-                JOptionPane.showMessageDialog(dmf, sAbout); 
+                //---moved into DMF constructor------------
+                // String sVersion = java.lang.System.getProperty("java.version"); 
+                // char cJRT = U.getCharAt(sVersion, 2);  
+                // int iJRT = java.lang.Character.getNumericValue(cJRT); 
+                // String sJRT = "JRT" + cJRT;  
+                
+                String sAbout = RELEASE+'\n'+COPYRIGHT+'\n'+COMPILER;
+                sAbout += "\nJava Runtime is: "+sLong; 
+                sAbout += "\nalso known as: "+sJRT; 
+                String sTitle = "About "+sWorkingTitle; 
+                JOptionPane.showMessageDialog(dmf, sAbout, sTitle, JOptionPane.PLAIN_MESSAGE); 
             }
         });
         helpMenu.add(showErrorMenuItem); 
@@ -517,7 +651,7 @@ public class DMF extends JFrame implements B4constants
         menubar.add(helpMenu); 
     }
 
-    //--------helpers for Java version-------------
+    //--------unused helpers for Java version-------------
 
     String getNumber(String arg)
     {
@@ -543,47 +677,51 @@ public class DMF extends JFrame implements B4constants
     {
         boolean bAutoLoad = false; // nothing yet to parse
 
-        String s = reg.getuo(UO_START, 0); 
-        if ((s.length()>1) && (oejif==null) && bFileReadCheck(s))
+        if ("T".equals(reg.getuo(UO_START, 1)) && (oejif == null))
         {
-            oejif = new OEJIF(iLast, fileMenuItem[0], fileMenuItem[3], true, s, MAXSURFS); 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-            jdp.add(oejif); 
-            oejif.setVisible(true);
-            oejif.toFront(); 
-            sMostRecentFilePathOpt = s; 
-            repaint();  // unnecessary?
-            bAutoLoad = true; 
+            String s = reg.getuo(UO_RECENTO, 0);  // most recent optics file
+            if ((s.length()>MINFILENAME) && bFileNameReadCheck(s))
+            {
+                setProject(U.getOnlyPath(s));                 
+                oejif = new OEJIF(iXY, s); 
+                iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                jdp.add(oejif); 
+                oejif.setVisible(true);
+                oejif.toFront(); 
+                repaint();  // unnecessary?
+                bAutoLoad = true;   // now something to parse?
+            }
         }
-        s = reg.getuo(UO_START, 1); 
-        if ((s.length()>1) && (rejif==null) && bFileReadCheck(s))
+        if ("T".equals(reg.getuo(UO_START, 3)) && (rejif == null))
         {
-            rejif = new REJIF(iLast, fileMenuItem[1], fileMenuItem[4], true, s, MAXRAYS); 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-            jdp.add(rejif); 
-            rejif.setVisible(true);
-            rejif.toFront(); 
-            sMostRecentFilePathRay = s; 
-            repaint();  // unnecessary?
-            bAutoLoad = true; 
+            String s = reg.getuo(UO_RECENTR, 0);  // most recent ray file  
+            if ((s.length()>MINFILENAME) && bFileNameReadCheck(s))
+            {
+                setProject(U.getOnlyPath(s)); 
+                rejif = new REJIF(iXY, s); 
+                iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                jdp.add(rejif); 
+                rejif.setVisible(true);
+                rejif.toFront(); 
+                repaint();  // unnecessary?
+                bAutoLoad = true; 
+            }
         }
-        s = reg.getuo(UO_START, 2); 
-        if ((s.length()>1) && (mejif==null) && bFileReadCheck(s))
+        if ("T".equals(reg.getuo(UO_START, 5)) && (mejif == null))
         {
-            mejif = new MEJIF(iLast, fileMenuItem[2], fileMenuItem[5], true, s, MAXMEDIA); 
-            iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-            jdp.add(mejif); 
-            mejif.setVisible(true);
-            mejif.toFront(); 
-            sMostRecentFilePathMed = s; 
-            repaint();  // unnecessary?
-            bAutoLoad = true; 
+            String s = reg.getuo(UO_RECENTM, 0);  // most recent media file
+            if ((s.length()>MINFILENAME) && bFileNameReadCheck(s))
+            {
+                setProject(U.getOnlyPath(s)); 
+                mejif = new MEJIF(iXY, s); 
+                iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                jdp.add(mejif); 
+                mejif.setVisible(true);
+                mejif.toFront(); 
+                repaint();  // unnecessary?
+                bAutoLoad = true; 
+            }
         }
-
-        //---display the application status if autoload--------
-
-        // if (bAutoLoad)
-        //   vMasterParse(true, true); // now handled by BJIF
     }
 
     //--------------manage client JIFs--------------------------
@@ -694,7 +832,8 @@ public class DMF extends JFrame implements B4constants
 
     public static class FMIlistener implements ActionListener 
     /// an action listener switchyard for FileMenuItems.
-    /// Graying will have been applied before we get here. 
+    /// Graying will have been applied by fileGrayingListener(), below.
+    // Need to generalize this to handle New, Open, Recent menu items. 
     {
         // default constructor ok, no static fields to initialize
 
@@ -703,7 +842,7 @@ public class DMF extends JFrame implements B4constants
             JMenuItem item = (JMenuItem) ae.getSource();
             String cmd = item.getActionCommand();
 
-            int index = ABSENT; 
+            int index = ABSENT;   // clumsy way to discover who called it.
             for (int i=0; i<NFITEMS; i++)
               if (cmd == fileItemStr[i])
                 index = i; 
@@ -712,87 +851,190 @@ public class DMF extends JFrame implements B4constants
             EJIF efront = getFrontEJIF(); 
             GJIF gfront = getFrontGJIF();  
 
-            boolean toOpen = (index > 2); 
-            int whicheditor = index % 3; 
-
-            JMenuItem fmi1 = fileMenuItem[whicheditor]; 
-            JMenuItem fmi2 = fileMenuItem[whicheditor + 3]; 
+            boolean toOpen = (index > 2); // decoder
+            int whicheditor = index % 3;  // decoder
             switch (index)
             {
                 case NEWOPT:
-                case OPENOPT:  
-                   oejif = new OEJIF(iLast, fmi1, fmi2, toOpen, "", MAXSURFS); 
-                   iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-                   jdp.add(oejif); 
-                   oejif.setVisible(true);
-                   oejif.toFront(); 
-                   try {oejif.setSelected(true);}
-                   catch(java.beans.PropertyVetoException pve) {}
-                   // vMasterParse(true); now handled by BJIF
-                   sMostRecentFilePathOpt = oejif.getFpath(); 
-                   break; 
-
+                    if (oejif == null)
+                    {
+                        String fname = getFileOpenPath() + "unnamed.OPT"; 
+                        writeSkeleton(fname); 
+                        oejif = new OEJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(oejif); 
+                        oejif.setVisible(true);
+                        oejif.toFront(); 
+                        try {oejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {} 
+                    }
+                    break; 
+                    
                 case NEWRAY:
-                case OPENRAY:  
-                   rejif = new REJIF(iLast, fmi1, fmi2, toOpen, "", MAXRAYS); 
-                   iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-                   jdp.add(rejif); 
-                   rejif.setVisible(true);
-                   rejif.toFront(); 
-                   try {rejif.setSelected(true);}
-                   catch(java.beans.PropertyVetoException pve) {}
-                   // vMasterParse(true); 
-                   sMostRecentFilePathRay = rejif.getFpath(); 
-                   break; 
-
+                    if (rejif == null)
+                    {
+                        String fname = getFileOpenPath() + "unnamed.RAY"; 
+                        writeSkeleton(fname); 
+                        rejif = new REJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(rejif); 
+                        rejif.setVisible(true);
+                        rejif.toFront(); 
+                        try {rejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {} 
+                    }
+                    break; 
+                    
                 case NEWMED:
+                    if (mejif == null)
+                    {
+                        String fname = getFileOpenPath() + "unnamed.MED"; 
+                        writeSkeleton(fname); 
+                        mejif = new MEJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(mejif); 
+                        mejif.setVisible(true);
+                        mejif.toFront(); 
+                        try {mejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {} 
+                    }
+                    break; 
+   
+                case OPENOPT:  
+                    if (oejif == null)
+                    {
+                        JFileChooser fc = new JFileChooser(); 
+                        fc.setDialogTitle("Open Optics"); 
+                        File fDir = new File(getFileOpenPath()); 
+                        if (fDir.isDirectory())
+                          fc.setCurrentDirectory(fDir); 
+                        FileNameExtensionFilter fnef = new FileNameExtensionFilter("Optics", "OPT"); 
+                        fc.setAcceptAllFileFilterUsed(false); 
+                        fc.addChoosableFileFilter(fnef); 
+                        int result = fc.showOpenDialog(dmf); 
+                        if (result != JFileChooser.APPROVE_OPTION)
+                          break; 
+                        File file = fc.getSelectedFile(); 
+                        if (!bVerifyFile(file))
+                        {
+                            break; 
+                        }
+                        DMF.sCurrentDir = file.getParent(); 
+                        String fname = file.getAbsolutePath(); 
+                        setProject(U.getOnlyPath(fname));                         
+                        oejif = new OEJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(oejif); 
+                        oejif.setVisible(true);
+                        oejif.toFront(); 
+                        try {oejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {}
+                        addRecent(0, fname);  // oejif is not yet ready to interrogate 
+                    }
+                    break; 
+                    
+                case OPENRAY: 
+                    if (rejif == null)
+                    {
+                        JFileChooser fc = new JFileChooser(); 
+                        fc.setDialogTitle("Open Rays"); 
+                        File fDir = new File(getFileOpenPath()); 
+                        if (fDir.isDirectory())
+                          fc.setCurrentDirectory(fDir); 
+                        FileNameExtensionFilter fnef = new FileNameExtensionFilter("Rays", "RAY"); 
+                        fc.setAcceptAllFileFilterUsed(false); 
+                        fc.addChoosableFileFilter(fnef); 
+                        int result = fc.showOpenDialog(dmf); 
+                        if (result != JFileChooser.APPROVE_OPTION)
+                          break; 
+                        File file = fc.getSelectedFile(); 
+                        if (!bVerifyFile(file))
+                        {
+                            break; 
+                        }
+                        DMF.sCurrentDir = file.getParent(); 
+                        String fname = file.getAbsolutePath(); 
+                        setProject(U.getOnlyPath(fname)); 
+                        rejif = new REJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(rejif); 
+                        rejif.setVisible(true);
+                        rejif.toFront(); 
+                        try {rejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {}
+                        addRecent(1, fname);  // rejif is not yet ready to interrogate 
+                    }
+                    break; 
+                    
                 case OPENMED:  
-                   mejif = new MEJIF(iLast, fmi1, fmi2, toOpen, "", MAXMEDIA); 
-                   iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
-                   jdp.add(mejif); 
-                   mejif.setVisible(true);
-                   mejif.toFront(); 
-                   try {mejif.setSelected(true);}
-                   catch(java.beans.PropertyVetoException pve) {}
-                   // vMasterParse(true); now handled by BJIF
-                   sMostRecentFilePathMed = mejif.getFpath(); 
-                   break;
-
+                    if (mejif == null)
+                    {
+                        JFileChooser fc = new JFileChooser(); 
+                        fc.setDialogTitle("Open Media"); 
+                        File fDir = new File(getFileOpenPath()); 
+                        if (fDir.isDirectory())
+                          fc.setCurrentDirectory(fDir); 
+                        FileNameExtensionFilter fnef = new FileNameExtensionFilter("Media", "MED"); 
+                        fc.setAcceptAllFileFilterUsed(false); 
+                        fc.addChoosableFileFilter(fnef); 
+                        int result = fc.showOpenDialog(dmf); 
+                        if (result != JFileChooser.APPROVE_OPTION)
+                          break; 
+                        File file = fc.getSelectedFile(); 
+                        if (!bVerifyFile(file))
+                        {
+                            break; 
+                        }
+                        DMF.sCurrentDir = file.getParent(); 
+                        String fname = file.getAbsolutePath(); 
+                        
+                        setProject(U.getOnlyPath(fname)); 
+                        mejif = new MEJIF(iXY, fname); 
+                        iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                        jdp.add(mejif); 
+                        mejif.setVisible(true);
+                        mejif.toFront(); 
+                        try {mejif.setSelected(true);}
+                        catch(java.beans.PropertyVetoException pve) {}
+                        addRecent(2, fname);  // mejif is not yet ready to interrogate 
+                    }
+                    break; 
+                    
                 case SAVE:
-                   if (efront != null)
-                     efront.pleaseSave(); 
-                   break; 
+                    if (efront != null)
+                      efront.pleaseSave(); 
+                    break; 
 
                 case SAVEAS:
-                   if (efront != null)
-                     efront.pleaseSaveAs(); 
-                   break; 
+                    if (efront != null)
+                      efront.pleaseSaveAs(); 
+                    break; 
 
                 case QUICKPNG:
-                   if (jiFront != null)
-                     bRequestWriteImage = true; // BJIF will process at next blink.
-                   break; 
+                    if (jiFront != null)
+                      bRequestWriteImage = true; // BJIF will process at next blink.
+                    break; 
 
                 case WRITECAD:
-                   if (gfront != null)
-                     gfront.doCAD(); 
-                   break; 
+                    if (gfront != null)
+                      gfront.doCAD(); 
+                    break; 
 
                 case WRITEHISTO:
-                   if (gfront != null)
-                     gfront.doWriteHisto();
-                   break; 
+                    if (gfront != null)
+                      gfront.doWriteHisto();
+                    break; 
 
                 case PRINT:
-                  if (efront != null)
-                    efront.tryPrint(); 
-                  else if (gfront != null)
-                    gfront.tryPrint(); 
-                  break; 
+                    if (efront != null)
+                      efront.tryPrint(); 
+                    else if (gfront != null)
+                      gfront.tryPrint(); 
+                    break; 
 
                 case QUIT:
-                   vMasterExit();
-                   break; 
+                    vMasterExit();
+                    break; 
             }
         }
     }
@@ -807,7 +1049,88 @@ public class DMF extends JFrame implements B4constants
             fileMenuItem[OPENOPT].setEnabled(oejif == null); 
             fileMenuItem[OPENRAY].setEnabled(rejif == null); 
             fileMenuItem[OPENMED].setEnabled(mejif == null); 
+            
+            jmRO.setEnabled(oejif == null); // menu for recent optics
+            jmRR.setEnabled(rejif == null); // menu for recent rays
+            jmRM.setEnabled(mejif == null); // menu for recent media
+            
+            //---Build the recent files list: first removeAll() menu items----
+            jmRO.removeAll(); 
+            jmRR.removeAll(); 
+            jmRM.removeAll(); 
+            
+            //---Gather the recent Opt files-----
+            int nOpt = 0;               // count the recent file names
+            for (int i=0; i<10; i++)    // count the recent file names
+            {
+                String s = reg.getuo(UO_RECENTO, i);
+                if (s.length() >= MINFILENAME)
+                  nOpt++; 
+            }
+            if (nOpt < 1)
+            {
+                JMenuItem ro = new JMenuItem("Sorry no recent OPT files"); 
+                jmRO.add(ro); 
+            }
+            else
+            {
+                JMenuItem ro[] = new JMenuItem[nOpt];
+                for (int i=0; i<nOpt; i++)
+                {
+                    ro[i] = new JMenuItem(reg.getuo(UO_RECENTO, i)); 
+                    ro[i].addActionListener(new RFListener()); 
+                    jmRO.add(ro[i]); 
+                }
+            }
+            //---and the ray JMenuItems----
+            int nRay = 0;               // count the recent file names
+            for (int i=0; i<10; i++)    // count the recent file names
+            {
+                String s = reg.getuo(UO_RECENTR, i);
+                if (s.length() >= MINFILENAME)
+                  nRay++; 
+            }
+            if (nRay < 1)
+            {
+                JMenuItem rr = new JMenuItem("Sorry no recent RAY files"); 
+                jmRR.add(rr); 
+            }
+            else
+            {
+                JMenuItem rr[] = new JMenuItem[nRay];
+                for (int i=0; i<nRay; i++)
+                {
+                    rr[i] = new JMenuItem(reg.getuo(UO_RECENTR, i)); 
+                    rr[i].addActionListener(new RFListener()); 
+                    jmRR.add(rr[i]); 
+                }
+            }
+            //---and the media JMenuItems.
+            int nMed = 0;               // count the recent file names
+            for (int i=0; i<10; i++)    // count the recent file names
+            {
+                String s = reg.getuo(UO_RECENTM, i);
+                if (s.length() >= MINFILENAME)
+                  nMed++; 
+            }
+            if (nMed < 1)
+            {
+                JMenuItem rm = new JMenuItem("Sorry no recent MED files"); 
+                jmRM.add(rm); 
+            }
+            else
+            {
+                JMenuItem rm[] = new JMenuItem[nMed];
+                for (int i=0; i<nMed; i++)
+                {
+                    rm[i] = new JMenuItem(reg.getuo(UO_RECENTM, i)); 
+                    rm[i].addActionListener(new RFListener()); 
+                    jmRM.add(rm[i]); 
+                }
+            }
+            
 
+            //---Only the selected frame can be printed or saved....
             JInternalFrame jif = jdp.getSelectedFrame(); 
             boolean anyselected = jif != null; 
             boolean oselected = (jif != null) && (jif == (JInternalFrame) oejif); 
@@ -832,6 +1155,58 @@ public class DMF extends JFrame implements B4constants
         public void menuCanceled(MenuEvent me) {}
     };
 
+
+    //----RecentFile listener------------------
+    
+    public static class RFListener implements ActionListener
+    {
+        // default constructor is OK, no static fields to initialize
+        
+        public void actionPerformed(ActionEvent e)
+        {
+             JMenuItem jmi = (JMenuItem) e.getSource(); 
+             String fname = jmi.getActionCommand(); 
+             String ext = U.getExtension(fname).toUpperCase(); 
+             int index = -1;
+             if (ext.equals(".OPT")) index=0;  // or EJIF.myFlavor
+             if (ext.equals(".RAY")) index=1; 
+             if (ext.equals(".MED")) index=2; 
+             switch (index)
+             {
+                 case 0: 
+                    oejif = new OEJIF(iXY, fname); 
+                    iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                    jdp.add(oejif); 
+                    oejif.setVisible(true);
+                    oejif.toFront(); 
+                    try {oejif.setSelected(true);}
+                    catch(java.beans.PropertyVetoException pve) {}
+                    addRecent(0, fname);  // oejif is not yet ready to interrogate 
+                    break; 
+                case 1:
+                    rejif = new REJIF(iXY, fname); 
+                    iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                    jdp.add(rejif); 
+                    rejif.setVisible(true);
+                    rejif.toFront(); 
+                    try {rejif.setSelected(true);}
+                    catch(java.beans.PropertyVetoException pve) {}
+                    addRecent(1, fname);  // rejif is not yet ready to interrogate 
+                    break;  
+                case 2:
+                    mejif = new MEJIF(iXY, fname); 
+                    iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
+                    jdp.add(mejif); 
+                    mejif.setVisible(true);
+                    mejif.toFront(); 
+                    try {mejif.setSelected(true);}
+                    catch(java.beans.PropertyVetoException pve) {}
+                    addRecent(2, fname);  // mejif is not yet ready to interrogate 
+                    break; 
+            }      
+        }
+    }
+    
 
     //------------edit menu------------------------
 
@@ -1021,8 +1396,8 @@ public class DMF extends JFrame implements B4constants
             else  // graphics cases Layout,P1D,MPlot,Map,MTF,P2D,P3D,Demo. 
             {
                 gjifTypes[index] = new GJIF(index, cmd, item); 
-                gjifTypes[index].setLocation(iLast, iLast); 
-                iLast = (iLast + iWindowOffset) % iWindowOffsetMax; 
+                gjifTypes[index].setLocation(iXY, iXY); 
+                iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
                 jdp.add(gjifTypes[index]); 
                 gjifTypes[index].setVisible(true);
                 gjifTypes[index].toFront();
@@ -1031,9 +1406,6 @@ public class DMF extends JFrame implements B4constants
             }
         }
     }
-
-
-
 
     //---------------option menu graying---------------------
 
@@ -1077,19 +1449,17 @@ public class DMF extends JFrame implements B4constants
 
     //--------------menu helper methods---------------------
 
-    public static JMenuItem makeItem(String label, ActionListener listener, 
-    int mnemonic,  int accel) 
+    public static JMenuItem makeItem(String label, ActionListener listener, char accel) 
     // Convenience: assembles a JMI from strings, listener, etc
     // Creates complete accelerated JMenuItems for FileMenu and EditMenu. 
+    // A175: eliminated all mnemonics.  
     {
         JMenuItem item = new JMenuItem(label);
         item.addActionListener(listener);
         item.setActionCommand(label);
-        if (mnemonic != 0) 
-          item.setMnemonic((char) mnemonic);
-        if (accel != 0) 
+        if (accel != NULLCHAR) 
         {
-            int iMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask(); 
+            int iMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMask();
             item.setAccelerator(KeyStroke.getKeyStroke(accel, iMask)); 
         }
         return item;
@@ -1339,61 +1709,69 @@ public class DMF extends JFrame implements B4constants
     }
 
 
-    public static void vMasterExit() 
-    // Always runs before permitting shutdown. 
+    public static void vMasterExit()
+    // Called by WindowListener and by FileMenuExit. 
+    // Polls each JIF to see if exit is OK.
+    // Each JIF will manage its own save where needed.
+    // Any cancels? Don't exit.
     {
-        //---first, check for MostRecentFiles-----
-        if (reg.getuo(UO_START,3).toUpperCase().trim().equals("T"))
+        JInternalFrame[] jifs = jdp.getAllFrames(); 
+        for (int i=0; i<jifs.length; i++)
         {
-            reg.putuo(UO_START,0, sMostRecentFilePathOpt); 
-            reg.putuo(UO_START,1, sMostRecentFilePathRay); 
-            reg.putuo(UO_START,2, sMostRecentFilePathMed); 
+            BJIF bjif = (BJIF) jifs[i]; 
+            if (!bjif.bExitOK(dmf))
+              return;    // bail out at first cancel.
         }
-        
-        //---then verify with each editor-----
-        boolean bExit = true; 
-        if ((oejif != null) && (!oejif.bExitOK()))
-          bExit = false;
-        if ((rejif != null) && (!rejif.bExitOK()))
-          bExit = false;
-        if ((mejif != null) && (!mejif.bExitOK()))
-          bExit = false;
-        if (bExit)
-          System.exit(0); 
-        else
-          dmf.setVisible(true);
+        System.exit(0);
     }
-
-} //----------end of DMF-----------------------
-
-
-
-
-
-
-
-/**
-   LimitingDesktopMgr.java
-   A DesktopManager that keeps its internal frames below the menubar.
-   This is called anytime an internal frame is moved.
-*/
-class LimitingDesktopMgr extends DefaultDesktopManager 
-{
-    public static final long serialVersionUID = 42L; 
     
+
+
+
+    //----Recent Files support---------
     
-    public void dragFrame(JComponent f, int x, int y) 
+    public static void addRecent(int k, String s)  // k=0:opt; k=1:ray; k=2:med.
     {
-        if (f instanceof JInternalFrame)
-          if (y < 0) 
-            y = 0; 
+        if (s.length() < MINFILENAME)        // reject tiny string.
+          return; 
+        int g = k+UO_RECENTO;                // UO group number
+        for (int i=0; i<10; i++)             // eliminate dupes.
+          if (s.equals(reg.getuo(g,i)))
+            for (int j=i; j<9; j++)          // pull one up to eliminate dupe.
+              reg.putuo(g,j,reg.getuo(g,j+1));    
+        for (int i=9; i>0; i--)              // push all down one, making room.
+          reg.putuo(g,i,reg.getuo(g,i-1));
+        reg.putuo(g, 0, s);                  // install new string at top.
+    }    
+    
 
-        // Pass along the limited values to the normal drag handler.
-        super.dragFrame(f, x, y);
-    }
-}
-           
 
+    public static boolean writeSkeleton(String fname)
+    {
+        File f = new File(fname); 
+        try
+        {
+            FileWriter fw = new FileWriter(f); 
+            PrintWriter pw = new PrintWriter(fw, true); 
+            pw.println("                                              "); 
+            pw.println("                                              "); 
+            pw.println("----------:----------:----------:----------:--"); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.println("          :          :          :          :  "); 
+            pw.flush(); 
+            pw.close(); 
+        }
+        catch (IOException e)  {return false; }
+        return true;
+    }    
+        
+} //----------end of DMF-----------------------
 
 
 
@@ -1501,3 +1879,33 @@ class DMFDropTargetListener implements DropTargetListener
  
     private DMF myDMF;
 }
+
+
+@SuppressWarnings("serial")
+
+class HeadroomDesktopManager extends DefaultDesktopManager 
+// http://stackoverflow.com/questions/8136944/preventing-underreach
+// but much simplified to eliminate underscoot. 
+{
+    @Override
+    public void beginDraggingFrame(JComponent f) 
+    {
+        // Don't do anything. Needed to prevent the DefaultDesktopManager 
+        // setting the dragMode.
+    }
+
+    @Override
+    public void beginResizingFrame(JComponent f, int direction) 
+    {
+        // Don't do anything. Needed to prevent the DefaultDesktopManager 
+        // setting the dragMode
+    }
+    
+    @Override
+    public void setBoundsForFrame(JComponent f, int x, int y, int w, int h) 
+    {
+        y = Math.max(y, 1); 
+        f.setBounds(x, y, w, h); 
+    }      
+}
+

@@ -61,16 +61,13 @@ class CAD implements B4constants
         int nb = (b == null) ? -1 : b.size(); // randList
         int nc = (c == null) ? -1 : c.size(); // finishList
         int nd = (d == null) ? -1 : d.size(); // annoList
-        System.out.println("CAD:doCAD()  na="+na+"   nb="+nb+"   nc="+nc+"  nd="+nd); 
         
         if (a == null)
         {
-            System.out.println("CAD:doCAD() null ArrayList received. Exitting.");
             return false;  
         }     
         if (a.size() < 1)
         {
-            System.out.println("CAD:doCAD() empty ArrayList received. Exitting.");
             return false;  
         }     
 
@@ -90,7 +87,6 @@ class CAD implements B4constants
         File file = jfc.getSelectedFile(); 
         if (file == null)
         {
-        	System.out.println("CAD:doCAD() chosen file is unavailable. Exitting.");
             return false; 
         }
         

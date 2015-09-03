@@ -6,17 +6,46 @@ import javax.swing.*;
 
 
 /** AutoRay.java
+  *
+  *  A174: improved results dialog. 
+  *
   * Adjusts one or two ray starts to deliver a distant pupil
   * Does ray tracing by calls to RT13.bRunOneRay().
   * Avoids use of Comparo.
   *
   * This version uses no timer, runs full speed, tight loop.
   * No i/o during the loop, only at the end. 
+  *
+  * Work is organized by RayHost.  After setup, it steps through each ray:
+  *   tests ray initially; 
+  *   initializes resid[] and sos; 
+  *   starts new LMray instance; 
+  *   OUTER LOOP iteratively calls LMray.iLMiter() as long as downward sos trend,
+  *      but will not exceed MAXITER. 
+  * When all rays are done, calls for InOut to display the new .RAY table. 
+  *
+  * LMray performs its initialization, then for each iLMiter() call:
+  *   gets current resid[] and sos; 
+  *   gets current Jacobian;
+  *   evaluates current undamped curvature matrix.  
+  *   if BIGVAL ray failure happens, requests an exit. 
+  *   Local INNER LOOP then...
+  *      applies some damping, tries a step;
+  *      if downhill, retains step, reduces damping, exits to OUTER LOOP;
+  *      if uphill, reverses step, raises damping, and tries again; 
+  *      if level, exits to host OUTER LOOP; 
+  *      if lambda>LAMBDAMAX, exits to host OUTER LOOP.
+  * 
+  *
+  *  RayHost supplies bBuildJacobian() which calls dNudge(), which calls dPerformResid().
+  *
+  *
+  * 
   * @author: M.Lampton (c) 2012 STELLAR SOFTWARE all rights reserved.
   */
 class AutoRay
 {
-    RayHost myhost = new RayHost(); // does everything.
+    RayHost myhost = new RayHost();       // does everything.
 }
 
 
@@ -28,39 +57,46 @@ class RayHost implements B4constants
 
 
     //-------------unique to Auto---------------
-    private LMray myLM = null; 
-    private int     MAXITER=10; 
-    private double tol = 1E-12;   
-    private int gkray;                // global so LM callbacks can use it.
+    private LMray  myLM     = null; 
+    private int    MAXITER  = 10; 
+    private double LMTOL    = 1E-12;   
+    private int gkray;                    // classwide so LM callbacks can use it.
 
     private int iLMstatus;  
     private int nsurfs      = 0;
     private int nrays       = 0;
     private int nadj        = 0;
     private int ngoals      = 0; 
-    private double drays[]  = {0, 0};    // ray values to compare
-    private double dgoals[] = {0, 0};    // goal values, differ for each ray    
-    private int    igoals[] = {-1,-1};   // goal attribs, same for all rays
-    private int    fgoals[] = {-1,-1};   // goal fields, same for all rays
+    private int navail      = 0;
+    private int nfinishes   = 0;
+    private int nwentbad    = 0;
+    
+    private double drays[]  = {0, 0};     // ray values to compare
+    private double dgoals[] = {0, 0};     // goal values, differ for each ray    
+    private int    igoals[] = {-1,-1};    // goal attribs, same for all rays
+    private int    fgoals[] = {-1,-1};    // goal fields, same for all rays
 
-    private double jac[][] = new double[2][2]; // [ngoals][nadj];
-    private double resid[] = {0, 0}; 
+    private double jac[][]  = new double[2][2]; 
+    private double resid[]  = {0, 0}; 
     private double dDelta[] = {1E-6, 1E-6}; 
+    private boolean badray  = false;      // flag when a ray goes sour
+    private JDialog jd      = null;       // to post results when done. 
+    
+    
 
-
-    public RayHost() // constructor; performs the entire task. 
+    public RayHost()                      // constructor does everything.
     {
         optEditor = DMF.oejif;
         rayEditor = DMF.rejif;
         if ((optEditor==null) || (rayEditor==null))
-          return;                          // SNH thanks to graying.
+          return;                         // SNH thanks to graying.
           
         rayEditor.doStashForUndo(); 
         
         nsurfs   = DMF.giFlags[ONSURFS]; 
         nrays    = DMF.giFlags[RNRAYS]; 
-        nadj     = DMF.giFlags[RNRAYADJ];     // set by REJIF during parse().
-        // nadj     = Math.min(nadj, 2);      // unnecessary with new REJIF.
+        nadj     = DMF.giFlags[RNRAYADJ]; // for AutoAdj: set by REJIF during parse().
+        // nadj     = Math.min(nadj, 2);  // unnecessary with new REJIF.
         if (nadj < 1)
         {
             JOptionPane.showMessageDialog(rayEditor, "AutoRay: no adjustables"); 
@@ -84,8 +120,8 @@ class RayHost implements B4constants
 
         //------Verify starting rays----------
 
-        int ngoodrays = RT13.iBuildRays(true);
-        if (ngoodrays < 1) 
+        navail = RT13.iBuildRays(true);
+        if (navail < 1) 
         {
             JOptionPane.showMessageDialog(optEditor, "AutoRay: no good rays");
             return; 
@@ -93,14 +129,18 @@ class RayHost implements B4constants
 
         //-----do each ray individually--------------
 
-        ngoodrays = 0; 
+        int ngoodstarts = 0;    // local count; should equal navail. 
+        nfinishes = 0; 
+        nwentbad = 0;  
+        
         for (gkray=1; gkray<=nrays; gkray++)
         {
             if(!RT13.bRunOneRay(gkray))
               continue;
-            ngoodrays++; 
-
-            // initialize resid[]
+            ngoodstarts++; 
+            badray = false;    // so far, so good.
+            
+            // initialize resid[] and sos; 
             double sos = 0; 
             for (int i=0; i<ngoals; i++)
             {
@@ -111,21 +151,85 @@ class RayHost implements B4constants
             }
 
             // now kick off LM process
-            myLM = new LMray(this, tol, nadj, ngoals); 
+            myLM = new LMray(this, LMTOL, nadj, ngoals); 
             boolean bDone = false; 
             int iter = 0; 
             while (!bDone)
             {
                  iter++; 
                  int iStatus = myLM.iLMiter(); 
-                 bDone = (iStatus==BADITER) ||
-                         (iStatus==LEVELITER) ||
-                         (iter >= MAXITER); 
+                 badray = badray || (iStatus==BADITER); 
+                 bDone = badray || (iStatus==LEVELITER) || (iter>MAXITER); 
             }
+            if (badray)
+               nwentbad++; 
+            else
+              nfinishes++; 
         }
-        vUpdateRayStarts();        // done with all rays
-        InOut myIO = new InOut();  // show the results
+        vUpdateRayStarts();        // post ray start adjustments to .RAY table
+        InOut myIO = new InOut();  // post ray trace results to .RAY table
+        vPostSummary();            // show local AutoRay result summary. 
     }
+    
+    
+    private void vPostSummary()
+    {
+        //----prepare the results-------------
+        
+        Comparo.doResiduals();   
+        int nptest = Comparo.iGetNPTS(); 
+        double sos = Comparo.dGetSOS(); 
+        double rms = Comparo.dGetRMS(); 
+        
+        //-----prepare the dialog-------------
+        
+        JFrame jf = DMF.getJFrame(); 
+        if (jd == null)
+          jd = new JDialog(jf, "AutoRay", false); 
+        jd.addWindowListener(new java.awt.event.WindowAdapter()
+        {
+            public void windowClosing(WindowEvent we)
+            {
+                jd.dispose();  
+            }
+        }); 
+        
+        Container cp = jd.getContentPane(); 
+        cp.setLayout(new BoxLayout(cp, BoxLayout.Y_AXIS)); 
+        int nLabels = 7; 
+        JLabel jL[] = new JLabel[nLabels]; 
+        for (int i=0; i<nLabels; i++)
+        {
+            jL[i] = new JLabel(); 
+            jL[i].setAlignmentX(Component.CENTER_ALIGNMENT); 
+        }        
+        
+        jL[0].setText("RMS 1D average = "+U.fwe(rms));  
+        jL[1].setText("Nrays = "+nrays); 
+        jL[2].setText("Ngoals = "+ngoals); 
+        jL[4].setText("Nstarts = "+navail); 
+        jL[5].setText("Nadjusted = "+nfinishes); 
+        jL[6].setText("Nfailed = "+nwentbad); 
+        
+        for (int i=0; i<nLabels; i++)
+          cp.add(jL[i]); 
+        cp.add(Box.createRigidArea(new Dimension(205, 5))); // pleasant width
+        
+        JButton jbDone = new JButton("Done"); 
+        jbDone.setAlignmentX(Component.CENTER_ALIGNMENT); 
+        jbDone.addActionListener(new ActionListener()
+        {
+            public void actionPerformed(ActionEvent aa)
+            {
+                jd.dispose(); 
+            }
+        });
+        cp.add(jbDone); 
+        jd.pack(); 
+        jd.setVisible(true); 
+        jd.toFront(); 
+    }
+    
 
  
 
@@ -153,7 +257,7 @@ class RayHost implements B4constants
 
     double dPerformResid()
     // Ray traces one ray, then evaluates resid[].
-    // Employed by LM and by dBuildJacobian() via dNudge(). 
+    // Employed by LMray and by bBuildJacobian() via dNudge(). 
     // fills in values of resid[]. 
     // Returns sum-of-squares.  One ray is global gkray.
     {
@@ -171,15 +275,15 @@ class RayHost implements B4constants
             return sos;
         }
         else
-          return BIGVAL; // special error code
+        {
+            badray = true; 
+            return BIGVAL; // special error code
+        }
     }
 
 
-
-
-
     double dNudge(double dp[])  
-    // Called by LM to modify parms. 
+    // Called by LMray to modify parms. 
     // Dimension of dp[] is total nadj.
     // This cannot fail, but dPerformResid() can fail rays. 
     {
@@ -193,15 +297,11 @@ class RayHost implements B4constants
     }
 
 
-
-
-
-
     boolean bBuildJacobian()
     // Uses current vector parms[].
     // If current parms[] is bad, returns false.  
     // False should trigger an explanation. 
-    // Called by LM.iLMiter().
+    // Called by LMray.iLMiter().
     {
         double delta[] = new double[nadj];
         double d=0; 
@@ -213,6 +313,7 @@ class RayHost implements B4constants
             d = dNudge(delta); // resid at pplus
             if (d==BIGVAL)
             {
+                badray = true; 
                 return false;  
             }
             for (int i=0; i<ngoals; i++)
@@ -224,6 +325,7 @@ class RayHost implements B4constants
             d = dNudge(delta); // resid at pminus
             if (d==BIGVAL)
             {
+                badray = true; 
                 return false;  
             }
 
@@ -236,10 +338,11 @@ class RayHost implements B4constants
             for (int k=0; k<nadj; k++)
               delta[k] = (k==j) ? dDelta[j] : 0.0;
 
-            d = dNudge(delta);  // return this parm to starting value.
+            d = dNudge(delta);  // back to starting value.
 
             if (d==BIGVAL)
             {
+                badray = true; 
                 return false;  
             }
         }
@@ -266,7 +369,7 @@ class RayHost implements B4constants
 
 
 /**
-  *  class LMray   Levenberg Marquardt w/ Lampton improvements
+  *  class LMray   Levenberg Marquardt Lampton
   *  M.Lampton, 1997 Computers In Physics v.11 #10 110-115.
   *
   *  Constructor is used to set up all parms including host for callback.
@@ -290,7 +393,7 @@ class LMray implements B4constants
     private final double LMBOOST    =  2.0;     // damping increase per bad step
     private final double LMSHRINK   = 0.10;     // damping decrease per good step
     private final double LAMBDAZERO = 0.001;    // initial damping
-    private final double LAMBDAMAX  =  1E9;     // max damping
+    private final double LAMBDAMAX  =  1E3;     // max damping
 
     private int niter = 0;                      // local diagnostic only
     private double sos, sosinit, lambda;        // local diagnostic only
@@ -301,10 +404,10 @@ class LMray implements B4constants
     private int     nparms = 0;    // overwritten by constructor
     private int     npts = 0;      // overwritten by constructor
 
-    private double[] delta;       // local
-    private double[] beta;        // local
-    private double[][] alpha;     // local
-    private double[][] amatrix;   // local 
+    private double[] delta;        // local
+    private double[] beta;         // local
+    private double[][] alpha;      // local
+    private double[][] amatrix;    // local 
 
     public LMray(RayHost gH, double gtol, int gnparms, int gnpts)
     // Constructor sets up private fields, including host for callbacks.
@@ -330,11 +433,11 @@ class LMray implements B4constants
     // Ref: M.Lampton, Computers in Physics v.11 pp.110-115 1997.
     {
         sosinit = myH.dPerformResid();
-        if (sosinit==BIGVAL)
-          return BADITER; // done; no further progress via iterations.  
+        if (sosinit==BIGVAL)              // failed ray?
+          return BADITER;                 // cannot proceed, request host OUTER LOOP exit.  
 
         if (!myH.bBuildJacobian())        // ask host for new Jacobian.
-          return BADITER;
+          return BADITER;                 // cannot proceed, request host OUTER LOOP exit.
 
         for (int k=0; k<nparms; k++)      // get downhill gradient beta
         {
@@ -342,7 +445,7 @@ class LMray implements B4constants
             for (int i=0; i<npts; i++)
               beta[k] -= myH.dFetchResid(i)*myH.dFetchJac(i,k);
         }
-        for (int k=0; k<nparms; k++)      // get curvature matrix alpha
+        for (int k=0; k<nparms; k++)      // get undamped curvature matrix alpha
           for (int j=0; j<nparms; j++)
           {
               alpha[j][k] = 0.0;
@@ -371,16 +474,16 @@ class LMray implements B4constants
 
             //---four possibilities and three exits---------
 
-            if (rise <= -lmtol)              // good step!
+            if (rise <= -lmtol)              // good downhill step!
             {
                lambda *= LMSHRINK;           // shrink lambda
-               return DOWNITER;                // leave inner loop
+               return DOWNITER;              // return to host: request another OUTER LOOP iteration.
             }
 
-            if (rise <= 0.0)                 // good step but level.
+            if (rise <= 0.0)                 // good step but level; all done. 
             {
-               lambda *= LMSHRINK;           // shrink lambda
-               return LEVELITER;             // leave inner loop
+               lambda *= LMSHRINK;           // no need to shrink lambda?
+               return LEVELITER;             // return to host: OUTER LOOP exit.
             }
 
             for (int k=0; k<nparms; k++)     // reverse course!
@@ -389,13 +492,14 @@ class LMray implements B4constants
 
             if (rise < lmtol)                // finished but keep prev parms
             {
-               return LEVELITER;             // leave inner loop
+               return LEVELITER;             // return to host: OUTER LOOP exit.
             }
 
-            lambda *= LMBOOST;               // else apply more damping.
-        } while (lambda<LAMBDAMAX);
+            lambda *= LMBOOST;               // UPITER:  apply more damping.
+        } while (lambda<LAMBDAMAX);          // and stay in this INNER LOOP.
 
-        return BADITER; 
+        return BADITER; // exceeded LAMBDAMAX, so request host OUTER LOOP exit.
+                        // usual cause is ray damage during minimization. 
     }
 
 

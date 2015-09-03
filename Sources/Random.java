@@ -45,7 +45,7 @@ class Random implements B4constants
     private int maxtries, maxgood, nBunch; 
     private int nsurfs, nrays, nfields; 
     private boolean bRunning = true; 
-    private int iEdits = 0;   // shuts down if editors change.
+    private int iEdits = 0;         // shuts down if editors change.
 
     public Random() // constructor
     {
@@ -64,7 +64,7 @@ class Random implements B4constants
         nrays = DMF.giFlags[RNRAYS]; 
         nfields = DMF.giFlags[RNFIELDS]; 
         nBunch = U.suckInt(DMF.reg.getuo(UO_RAND, 0)); 
-        nBunch = Math.max(1, Math.min(1000, nBunch)); 
+        nBunch = Math.max(1, Math.min(MAXBUNCH, nBunch)); 
         maxtries = U.suckInt(DMF.reg.getuo(UO_RAND, 1)); 
         maxtries = Math.max(1, maxtries); 
         maxgood = U.suckInt(DMF.reg.getuo(UO_RAND, 2)); 
@@ -76,8 +76,7 @@ class Random implements B4constants
 
     private void buildDialog()
     {
-        JFrame jf = DMF.getJFrame(); 
-        jd = new JDialog(jf, "Random", false); 
+        jd = new JDialog(DMF.dmf, "Random", false); 
         jd.addWindowListener(new java.awt.event.WindowAdapter()
         {
             public void windowClosing(WindowEvent we)

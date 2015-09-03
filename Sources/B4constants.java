@@ -14,17 +14,20 @@ import java.awt.*;   // Color
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 173, 30 Mar 2015";
-    // fill in your compiler below, e.g. "Compiler: Javac 1.8.0_20"
-    static final String  COMPILER   = "Compiler: Javac 1.8.0_20";
+    static final String  RELEASE    = "Release 184, 31 August 2015";
+    // fill in your compiler below... "Compiler was: Javac 1.6.0_65" for user compatibility
+    static final String  COMPILER   = "Compiler was: Javac 1.6.0_65";
     static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 
-
+    static final char    NULLCHAR   = (char) 0;
+    
     static final int BLINKMILLISEC      = 300; // millisec
     static final int INITIALFRAMEWIDTH  = 600; // pixels
     static final int INITIALFRAMEHEIGHT = 500; // pixels
     static final int INITIALEDITWIDTH   = 400; // pixels
     static final int INITIALEDITHEIGHT  = 300; // pixels
-
+    static final int DIAGONAL           = 10;  // diagonal spacing of windows
+    static final int MINFILENAME        = 5;   // shortest legal filename
+    
     // To evaluate INITIALGRAPHICSIZE see getUOpixels() below...
 
     static final int MAXPOLYARG     = 999948; // bigger crashes drawPolyline()
@@ -32,6 +35,7 @@ interface B4constants
     // note: no MAXQUADS since quadLists are self-sizing arrayLists. 
     static final int MAXSORT        = 10000;  // sorted layout items
     static final int MAXHOLES       = 1000;   // array iris ceiling
+    static final int MAXBUNCH       = 10000;  // max random rays per refresh
 
     static final int ABSENT         = -1;     // but yikes see below...
     static final int TRUE           = 1;
@@ -43,7 +47,7 @@ interface B4constants
     static final int FATLINE        = 1;
 
     static final int IMAX           = 256;       // EPanel charTable
-    static final int JMAX           = 1600;      // EPanel charTable
+    static final int JMAX           = 3600;      // EPanel charTable
     static final int MAXFIELDS      = 100;
     static final int MAXSURFS       = 100;       // < JMAX
     static final int MAXGROUPS      = MAXSURFS;  
@@ -537,14 +541,16 @@ interface B4constants
     static final int RTVL           =    11; // dGetRay() local ray
     static final int RTWL           =    12; // dGetRay() local ray
     static final int RTANGLE        =    13; // dGetRay() global ray
-    static final int RTWFE          =    14; // dGetRay() special.
-    static final int RNATTRIBS      =    15; // how many ray output attribs
+    static final int RTNORMX        =    14; // dGetRay()
+    static final int RTNORMY        =    15;  
+    static final int RTNORMZ        =    16;  
+    static final int RTWFE          =    17; // dGetRay() special.
+    static final int RNATTRIBS      =    18; // how many ray output attribs
 
 /*-----------------ray table special calculation codes--------------------*/
 
     static final int RNOTE          =   133; // text output only
     static final int RDEBUG         =   134; // text output only
-    // static final int RDOT           =   135; // dot product numerical output
     static final int RFINAL         = 10000; // placeholder for 100*nsurfs term
     static final int RGOAL          = 10100; // input/output goal term
 
@@ -670,7 +676,10 @@ interface B4constants
    static final int UO_2DRRAY  = 16; 
    static final int UO_2DCRAY  = 17; 
    static final int UO_2DCGAUS = 18; 
-   static final int NUOGROUPS  = 19; 
+   static final int UO_RECENTO = 19; 
+   static final int UO_RECENTR = 20; 
+   static final int UO_RECENTM = 21; 
+   static final int NUOGROUPS  = 22; 
 
 //--------UO strings: avoid "|" used in parsing-----------
 //----UO strings is a ragged right array, 
@@ -884,7 +893,6 @@ interface B4constants
           {"*Concentration=",           "4"}   // 12
        },  
 
-
        {  // group 10 = UO_CAD
           {"Postscript,  .EPS",   "T"},  // 0
           {"Plot size A,  .PLT",  "F"},  // 1
@@ -900,10 +908,21 @@ interface B4constants
        },
 
        {  // group 11 = UO_START
-          {"OpticsFile.OPT",         ""},  // 0
-          {"RayFile.RAY",            ""},  // 1
-          {"MediaFile.MED",          ""},  // 2
-          {"Or the current files?", "T"}   // 3
+          {"No AutoLoad",              "F"}, // 0, radio button
+          {"AutoLoad most recent",     "T"}, // 1, radio button
+          {"No AutoLoad",              "F"}, // 2, radio button
+          {"AutoLoad most recent",     "T"}, // 3, radio button
+          {"No AutoLoad",              "F"}, // 4, radio button
+          {"AutoLoad most recent",     "T"}, // 5, radio button
+          {"Start at User Home",       "F"}, // 6, radio button for File:Open
+          {"Or most recent folder",    "T"}, // 7, radio button for File:Open
+          {"RecentFolder",             "/"}, // 8, invisible field for File:Open
+          {"Allow MacOS icons",        "F"}, // 9, radio button
+          {"Forbid MacOS icons",       "T"}  // 10, radio button
+          // Caution: an empty data field wreaks havoc with the registry.
+          // Hence, I am using a solidus as a placeholder here.
+          // DMF will replace it with default User.Home at startup,
+          // and each subsequent file load will update to that folder. 
        },
 
        {  // group 12 = UO_EDIT
@@ -1007,7 +1026,46 @@ interface B4constants
           {"Start at row",           "1"},  // 10
           {"ray starts?",            "T"},  // 11
           {"or ray goals?",          "F"}   // 12
-       }
+       },
+       
+       {  //  group 19 = UO_RECENTO
+          {"RO0", ""},
+          {"RO1", ""},
+          {"RO2", ""},
+          {"RO3", ""},
+          {"RO4", ""},
+          {"RO5", ""},
+          {"RO6", ""},
+          {"RO7", ""},
+          {"RO8", ""},
+          {"RO9", ""}
+       },
+       
+       {  // group 20 = UO_RECENTR
+          {"RR0", ""},
+          {"RR1", ""},
+          {"RR2", ""},
+          {"RR3", ""},
+          {"RR4", ""},
+          {"RR5", ""},
+          {"RR6", ""},
+          {"RR7", ""},
+          {"RR8", ""},
+          {"RR9", ""}
+       },
+
+       {  // group 21 = UO_RECENTM
+          {"RM0", ""},
+          {"RM1", ""},
+          {"RM2", ""},
+          {"RM3", ""},
+          {"RM4", ""},
+          {"RM5", ""},
+          {"RM6", ""},
+          {"RM7", ""},
+          {"RM8", ""},
+          {"RM9", ""}
+       }   
     };
 
 } //--------end of Constants.java---------------------

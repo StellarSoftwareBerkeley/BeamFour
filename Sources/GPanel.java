@@ -159,6 +159,10 @@ abstract class GPanel extends JPanel implements B4constants, Printable
 
     public GPanel()  // host class for artwork generators
     {
+        ///// testing suggestion from StackOverflow...
+        ///// this.setDoubleBuffered(false); 
+        ///// does it work?  Nope.
+        
         baseList   = new ArrayList<XYZO>(); 
         batchList  = new ArrayList<XYZO>(); 
         randList   = new ArrayList<XYZO>(); 
@@ -215,7 +219,6 @@ abstract class GPanel extends JPanel implements B4constants, Printable
         
         int lRand = randList.size();
         int lBatch = batchList.size(); 
-        // System.out.println("GPanel:redo() starting: nrand, nbatch = "+lRand+"  "+lBatch); 
 
         boolean bTooBig = (lRand + lBatch > MAXRANDQUADS); 
         if (!bTooBig)
@@ -404,8 +407,6 @@ abstract class GPanel extends JPanel implements B4constants, Printable
             randList.clear(); 
             finishList.clear(); 
             annoList.clear(); 
-
-            // System.out.println("GPanel:drawPage() baseList.clear(), size = "+baseList.size());  
             prevwidth = dim.width; 
             prevheight = dim.height; 
             biTech = new BufferedImage(dim.width, dim.height,
@@ -413,8 +414,7 @@ abstract class GPanel extends JPanel implements B4constants, Printable
             g2Tech = (Graphics2D) biTech.getGraphics();
             setGraphicSmoothing(g2Tech);
 
-            doTechList(bArtStatus); // locally stashed bArtStatus 
-            // System.out.println("GPanel:drawPage() doTechList() call, now size = "+baseList.size());              
+            doTechList(bArtStatus); // locally stashed bArtStatus             
             double dStereo = getStereo(); 
             
             if (dStereo == 0.0)

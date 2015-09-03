@@ -704,9 +704,7 @@ public class MapPanel extends GPanel // implements Runnable
                 pw.close(); 
             }
             catch (IOException e)
-            { 
-                System.out.println("File write failed."); 
-            }
+            { }
         }
     }
 

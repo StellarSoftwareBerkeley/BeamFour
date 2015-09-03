@@ -57,7 +57,38 @@ class U implements B4constants
         return i*10 + b-48; 
     }
 
-
+    public static String getExtension(String fname)
+    // includes the dot.
+    {
+        try {return fname.substring(fname.lastIndexOf(".")); }
+        catch (Exception e) {return ""; }
+    }
+    
+    public static String removeExtension(String fname)
+    // deletes the dot.
+    {
+        if (fname == null)
+          return null; 
+        int index = fname.lastIndexOf("."); 
+        if (index > 2)
+          return fname.substring(0, index); 
+        else
+          return fname; 
+    }
+    
+    public static String getOnlyPath(String fullname)
+    // deletes the filename and extension from fpath. 
+    // gives the directory path without final slash.
+    {
+        if (fullname == null)
+          return null;
+        int index = fullname.lastIndexOf("/"); 
+        if (index > 2)
+          return fullname.substring(0, index); 
+        else
+          return fullname; 
+    }
+    
     static int getColorCode(char c)
     // allows artwork to convert a tag char into a display color
     {

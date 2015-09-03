@@ -280,9 +280,6 @@ class RT13 implements B4constants
               for (int grp=0; grp<=howfar[k]; grp++)
                 for (int iatt=0; iatt<RNATTRIBS; iatt++)
                   dRays[k][grp][iatt] = rayseq[grp][iatt];  // also in bRunOneRay() ???
-                  
-              // dot[k] = getDot(rayseq[howfar[k]], surfs[gnsurfs], k);  // line 1853; rayseq[group][iattr].  
-              // System.out.println("  ....RT13 result dot["+k+"]= "+U.fwd(dot[k],12,6));          
           }
 
         doWFEtask(ngood, gnrays, gngroups); 
@@ -1835,7 +1832,7 @@ class RT13 implements B4constants
     // method: r = i - 2 (i dot n) n
     // note this is quadratic in n, hence independent of sign(n)
     {
-        double[] norm = new double[13];
+        double[] norm = new double[RNATTRIBS];
         vGetPerp(ray, surf, norm); 
         double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
         ray[RTUL] -= 2.0 * dotin * norm[RTUL];
@@ -1849,16 +1846,18 @@ class RT13 implements B4constants
     static private void vSetAngle(double ray[], double surf[])
     // M.Lampton STELLAR SOFTWARE (C) 2015
     // uses iMirror() tools to get any intercept ray dot normal.
-    // called by iRedirect for good rays, fills in ray[RTANGLE]
+    // called by iRedirect for good rays, fills in ray[RTANGLE] and normal vector. 
     {
-        double[] norm = new double[13];
+        double[] norm = new double[RNATTRIBS];
         vGetPerp(ray, surf, norm); 
-        // System.out.println("RT13: "+k+" ray[RTWL]="+U.fwd(ray[RTWL],12,6)+"  norm[RTWL]="+U.fwd(norm[RTWL],12,6)); 
         double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
         ray[RTANGLE] = U.arccosd(Math.abs(dotin)); 
+        ray[RTNORMX] = norm[RTUL]; 
+        ray[RTNORMY] = norm[RTVL]; 
+        ray[RTNORMZ] = norm[RTWL]; 
     }
-    
 
+    
     static private int iRetro(double ray[], double surf[])
     {
         ray[RTUL] *= -1.0; 

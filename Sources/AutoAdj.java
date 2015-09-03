@@ -254,7 +254,7 @@ class AdjHost implements B4constants
         {
             public void actionPerformed(ActionEvent aa)
             {
-               shutdown(); 
+                shutdown(); 
             }
         }); 
 
@@ -438,8 +438,9 @@ class AdjHost implements B4constants
         } 
         if (jd != null)
         {
-            jd.setVisible(false);  
-            jd = null;
+            jd.dispose();      // does it all
+            // jd.setVisible(false);  
+            // jd = null;
         } 
         //---with dialog gone, can resync front & selected----
         DMF.bringEJIFtoFront(optEditor);

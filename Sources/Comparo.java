@@ -13,7 +13,7 @@ package com.stellarsoftware.beam;
   *  also  dGetRMS()
   *  also  resid[]  with npts data points.
   *
-  *  Has no UI except via OEJIF, REJIF.  
+  *  Has no UI except via OEJIF, REJIF, AutoAdj, AutoRay.
   *  Imports nothing. 
   *  Assumes that RT13.iBuildRays() has already been run.
   *  Assumes RT13.dRays[k][j][i], RT13.bGoodRay[k] are current.

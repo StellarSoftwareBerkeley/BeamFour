@@ -10,7 +10,7 @@ import javax.swing.text.*;  // BadLocationException
   *  REJIF is a concrete ray editor class extending EJIF.
   *  It supplies EJIF's abstract method parse(). 
   *  It implements Consts via EJIF. 
-  * 
+  *  A174: includes ray-intercept normal components {i,j,k}
   *  A156: allows "wa" to substitute for "@wave"
   *
   *  Uses U for suckInt(), suckDouble, getCharAt(), and for debugging.
@@ -48,10 +48,9 @@ class REJIF extends EJIF
     // public static final long serialVersionUID = 42L;
 
 
-    public REJIF(int x, JMenuItem gjmi1, JMenuItem gjmi2, 
-    boolean toOpen, String gfname, int gmaxrec)
+    public REJIF(int iXY, String gfname)
     {
-        super(1, x, ".RAY", gjmi1, gjmi2, toOpen, gfname, gmaxrec); 
+        super(1, iXY, ".RAY", gfname, MAXRAYS); // call EJIF for preliminary parse()
         myFpath = gfname; 
     }
 
@@ -67,7 +66,7 @@ class REJIF extends EJIF
     {    
         adjustables = new ArrayList<Adjustment>(); 
 
-        //---First set DMF.giFlags[] defaults--------------
+        //---First set DMF.giFlags[] defaults for rays--------------
 
         int status[] = new int[NGENERIC]; 
         vPreParse(status);                          // EJIF generic parser
@@ -265,7 +264,10 @@ class REJIF extends EJIF
      *  Careful: RGOAL=10100 is both an input and output field.
      *  MLL Aug1998: added 'o', 'O' as synonyms for zero '0'
      *  MLL Oct2013: added "wa" as synonym for "@" wavelength
-     *  input data have surfcode==0
+     *  MLL Apr2015: added i,j,k callouts for local surface normal
+     *
+     *  output data have surfcodes = 100*jsurf
+     *  input data have surfcode = 0
      *  The interpretation of RFINAL cannot be done here since nsurfs may change.
      *  It has to be done within the output routine, not here. 
      *  The methods RT13.getSurf(op) and RT13.getAttr(op) do this.
@@ -283,13 +285,13 @@ class REJIF extends EJIF
         if (len>2)
           c2up = s.charAt(2);  
 
-        if (c0up == 'N')            // raynotes output field
+        if (c0up == 'N')             // notes output field
           return RNOTE;
-        if (c0up == 'D')    
-          return RDEBUG;   
-        if (c0up == 'O')            // diffraction order input field
+        if (c0up == 'D')             // output debug field
+          return RDEBUG;              
+        if (c0up == 'O')             // input diffraction order field
           return RSORDER;
-        if (c0up == '@')            // wavelength input field.
+        if (c0up == '@')             // input wavelength field.
           return RSWAVEL;
         if ((c0up=='W') && (c1up=='A'))
           return RSWAVEL;           // also a wavelength input field.
@@ -299,12 +301,12 @@ class REJIF extends EJIF
 
         /// calculate the surfcode:
         int surfcode = 0; 
-        switch (c1up)
+        switch (c1up)   // c1 determines the surface code. DO NOT USE C1 FOR OTHER THINGS.
         {
             case ' ':
             case 'F': surfcode = RFINAL; break;   // 10000
             case 'G': surfcode = RGOAL; break;    // 10100
-            case 'O': surfcode = 0;  break;       // synonym for zero
+            case 'O': surfcode = 0;  break;       // synonym for zero = ray start info.
             default:  surfcode = 100*U.getTwoDigitCode(s); 
         }
         if (surfcode < 0)
@@ -313,7 +315,6 @@ class REJIF extends EJIF
         boolean bNonzero = surfcode > 99; 
         
         /// now affix the attribute code:
-
         switch (c0)
         {
             case 'X':  return RX+surfcode;
@@ -332,6 +333,9 @@ class REJIF extends EJIF
             case 'w':  return bNonzero ? RTWL+surfcode : RW;
             case 'A':
             case 'a':  return RTANGLE+surfcode; 
+            case 'i':  return RTNORMX+surfcode; 
+            case 'j':  return RTNORMY+surfcode; 
+            case 'k':  return RTNORMZ+surfcode; 
             default:   return RABSENT;
         }
     }

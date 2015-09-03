@@ -52,11 +52,12 @@ import javax.imageio.*;       // PNG, GIF, JPG
   *
   * New doQuickPNG installed Nov 2014  A166.
   *
+  * A181 August 2015: forbidding MacOS "minimize" button action; too crashy.
+  *
   *  @author M.Lampton (c) 2007 STELLAR SOFTWARE all rights reserved.
   */
 abstract class BJIF extends JInternalFrame implements B4constants
 {
-    // public static final long serialVersionUID = 42L; // Xlint 8 Oct 2014 ??
     protected boolean bNeedsParse=false;    // BJIF timer calls vMasterParse
 
     private java.util.Timer caretTimer;  
@@ -64,11 +65,21 @@ abstract class BJIF extends JInternalFrame implements B4constants
     private boolean bCaret = false; 
     private Container myC = null; 
 
-
+    abstract boolean bExitOK(Component c); // must be provided by each subclass
+    
     public BJIF(String s) // constructor
     {
-        super(s, true, true, true, true);   // set up JIF
-        myC = getContentPane();             // default keyTarget
+        super(s, true, true, true, true); 
+        setName(s); 
+        setTitle(s); 
+        
+        LookAndFeel laf = UIManager.getLookAndFeel(); 
+        boolean bMacIconOK = "T".equals(DMF.reg.getuo(UO_START, 9)); 
+        boolean bMac = "Mac OS X".equals(laf.getName()); 
+        if (bMac)
+          super.setIconifiable(bMacIconOK); 
+
+        myC = getContentPane();
 
         this.addInternalFrameListener(new InternalFrameAdapter()
         {
@@ -96,12 +107,11 @@ abstract class BJIF extends JInternalFrame implements B4constants
                 DMF.vMasterParse(true); 
             }
         });
-
+        
         //-----------set up the caret engine-----------------
         caretTimer = new java.util.Timer(); 
         caretTimer.schedule(new BlinkTask(this), 0, BLINKMILLISEC); // trying "this"
     }
-
 
     public void setKeyPanel(Container c)
     // allows EJIF to override ContentPane with its ePanel.
@@ -109,13 +119,10 @@ abstract class BJIF extends JInternalFrame implements B4constants
        myC = c; 
     }
 
-
     public boolean getCaretStatus() // called by descendant's client JPanel
     {
         return bCaret;
     }
-
-
 
     //----------------private methods-------------------------
 
@@ -156,8 +163,6 @@ abstract class BJIF extends JInternalFrame implements B4constants
         }
     }
 
-
-
     static private void doQuickPNG(BJIF myBJIF)
     // static private void doQuickPNG(Container myC)
     // Called from BlinkTask (above) when DMF.bRequestWriteImage==true.
@@ -181,8 +186,6 @@ abstract class BJIF extends JInternalFrame implements B4constants
         
 
         File cwd = jfc.getCurrentDirectory(); 
-        // System.out.println("doQuickPNG CWD = "+cwd); 
-        
         File[] files = cwd.listFiles(); 
         ArrayList<Integer> aList = new ArrayList<Integer>(); 
         for (int i=0; i<files.length; i++)
@@ -192,7 +195,6 @@ abstract class BJIF extends JInternalFrame implements B4constants
               if (fname.startsWith("QUICK") && fname.endsWith(".PNG"))
               {  
                   int j = U.suckInt(fname); 
-                  // System.out.println(fname + "    "+j); 
                   aList.add(j); 
               }
           }
@@ -210,12 +212,10 @@ abstract class BJIF extends JInternalFrame implements B4constants
               if (aList.get(i) == firstAvail)
                 bOK = false;  
         } while (bOK == false); 
-        // System.out.println("First avail = "+firstAvail); 
         
         //----now build the complete file name----
         String fname = "Quick" + firstAvail + ".png"; 
         String cfname = cwd + File.separator + fname; 
-        // System.out.println(cfname); 
         
         //---now create the output file----
         File outfile = new File(cfname); 
@@ -227,9 +227,7 @@ abstract class BJIF extends JInternalFrame implements B4constants
         Rectangle r = contentPanel.getBounds(); 
         Point pxy = contentPanel.getLocationOnScreen(); 
         r.x = pxy.x; 
-        r.y = pxy.y; 
-        // System.out.println(" x="+r.x+"   y="+r.y+"   width="+r.width+"   height="+r.height); 
-                        
+        r.y = pxy.y;                         
         try
         {
             Robot robot = new Robot();

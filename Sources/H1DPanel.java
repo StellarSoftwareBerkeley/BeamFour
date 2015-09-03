@@ -486,7 +486,7 @@ public class H1DPanel extends GPanel
         if (bShowAverage && (count > 0))
         {
             double average = sum/count; 
-            String sAverage = "avg=" +U.fwd(average,12,3).trim()+" n="+count; 
+            String sAverage = "avg=" +U.fwd(average,12,6).trim()+" n="+count; 
             int nchar = sAverage.length(); 
             for (int k=0; k<nchar; k++)
             {

@@ -2,6 +2,7 @@ package com.stellarsoftware.beam;
 
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.AWTEvent.*;      // consume: nope.
 import java.awt.geom.*;          // printing
 import java.awt.print.*;         // printing
 import javax.print.attribute.*;  // printing attributes
@@ -13,6 +14,7 @@ import java.beans.*;             // vetoableChangeListener
 
 import javax.swing.*;            // everything else
 import javax.swing.event.*;      // for MenuEvents and InternalFrameAdapter
+import javax.swing.filechooser.FileNameExtensionFilter;  
 
 @SuppressWarnings("serial")
 
@@ -20,6 +22,8 @@ import javax.swing.event.*;      // for MenuEvents and InternalFrameAdapter
   * EJIF.java  --- Abstract class,  EPanel in a JInternalFrame.
   * It extends BJIF thereby obtaining a blinker for caret management. 
   * It manages the JScrollBars. 
+  *
+  * A181: closing not closed;  3-button dirty exit dialog using iExitOK().
   *
   * In A163, building the horizontal scrollbar into a JPanel
   * leftward of a fixed block, installed in cPanel.South,
@@ -69,7 +73,7 @@ import javax.swing.event.*;      // for MenuEvents and InternalFrameAdapter
   *  public void setCaretXY(i,j)        // DMF
   *  public void pleaseSave()           // DMF
   *  public void pleaseSaveAs()         // DMF
-  *  public boolean bExitOK()           // DMF
+  *  public boolean iExitOK()           // DMF
   *  public boolean areYouEmpty()       // DMF
   *  public boolean areYouDirty()       // DMF
   *  public void setClean()             // DMF
@@ -110,7 +114,7 @@ import javax.swing.event.*;      // for MenuEvents and InternalFrameAdapter
   *        fname:         -     -      FILENAME.EXT
   *
   * Autostartup default is local directory
-  * Chooser default is "MyDocuments"  -- make this specifiable?
+  * Chooser default is "MyDocuments"  -- poor choice!
   * To adopt the current working directory H&C p.474 suggest
   *   chooser.setCurrentWorkingDirectory(new File("."));
   * filename converts to a File: LJ p.303
@@ -124,18 +128,15 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
     //--------protected fields shared with extensions-----
 
     protected String myFpath;
+    protected String myPathOnly;   
     protected String myExt;               // remember my extension
-    protected String myExtType;           // remember my extension and type; 
-    protected int    myExtNumber = 0;     // 1, 2, 3 mean Opt, Ray, Med. 
+    protected String myExtType;           // remember my extension type; 
 
     //-------private EJIF fields---------------------------
 
-    private JMenuItem jmi1, jmi2;         // menuItems for ungraying.
-
-    private int myStackNumber;            // remember my stacking number
+    private int myFlavor;                 // remember my flavor: 0,1,2=opt,ray,med
     private int maxrecords;               // depends on editor type
     private boolean bDirty=false;         // avoid exit if unsaved changes
-    // private boolean bNeedsParse=false; // inherit from host BJIF
     private int iCountdown = 0;           // manage temporary titles
     private File myFile=null; 
     private EPanel ePanel=null; 
@@ -145,188 +146,115 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
 
     //---------------public methods and fields-------------------
 
-    abstract void parse();   // supplied by extensions. 
+    abstract void parse();   // supplied by extensions OEJIF, REJIF, MEJIF.
+            
+    public boolean bExitOK(Component parent)
+    // Called here, or by main DMF window exit.
+    // Buttons, 0, 1, 2 = save, exit, cancel:
+    // Mac appearance is 2, 1, 0 = cancel, no, yes.
+    // The caller will do the actual closing locally via dispose(),
+    // or globally if no cancels via System.exit(0)
+    {    
+        if (!bDirty)
+        {
+            return true; 
+        }
+        Object[] options = {"Save + exit", "Don't save", "Cancel"}; 
+        int result = JOptionPane.showOptionDialog(
+                parent, 
+                "Unsaved changes in "+myExt, 
+                "Exit Warning", 
+                JOptionPane.YES_NO_CANCEL_OPTION,
+                JOptionPane.QUESTION_MESSAGE, 
+                null,  // no custom icon
+                options, 
+                options[0]);  
+
+        switch (result)
+        {
+            case 0: pleaseSave();  return true;  // now ok to exit
+            case 1: return true; 
+            default: return false;  // cancel = 2, or red dot = -1.
+        }
+    }
+
+
  
-    public EJIF(int which, int iLoc, String gExt, JMenuItem gjmi1, 
-     JMenuItem gjmi2, boolean toOpen, String gFname, int gmaxrec)
+    public EJIF(int flavor, int iLoc, String gExt, String gFname, int gmaxrec)
+    // Do not construct an EJIF unless the file & contents verify okay.
+    // This revision A178 August 2015
     // (c) 2004 M.Lampton STELLAR SOFTWARE
     {
         super(gExt);          // set up BJIF 
-        myExt = gExt;         // with initial period 
+        myExt = gExt;         // includes initial period 
         super.setSize(INITIALEDITWIDTH, INITIALEDITHEIGHT); 
         super.setLocation(iLoc, iLoc); 
 
-        myFpath = gFname; 
+        myFpath = gFname;   // includes path and name; PRETESTED
+        myPathOnly = U.getOnlyPath(gFname); // for saveAs, line 410
+        if (myPathOnly.length() < 1)
+          myPathOnly = System.getProperty("user.home"); 
         maxrecords = gmaxrec; 
+        myFlavor = flavor;   // 0=opt, 1=ray, 2=med.
 
-        //---Set up the JMenuItems for ungraying upon closing-------               
-        jmi1 = gjmi1;             // save this within object for enable-on-close
-        jmi2 = gjmi2;             // ditto
-        myStackNumber = which;    // ditto
-        myExt = gExt; 
-        char c = U.getCharAt(myExt, 1); // skip initial period
-        switch (c)
-        {
-           case 'o': 
-           case 'O': myExtNumber = 1; break; 
-           case 'r': 
-           case 'R': myExtNumber = 2; break; 
-           case 'm': 
-           case 'M': myExtNumber = 3; break; 
-           default:  myExtNumber = 0; // should never happen!
-        }
-        
-        jmi1.setEnabled(false);                               
-        jmi2.setEnabled(false);          
-
-        // create and install the EPanel into cPane
-        // but don't replace cPane! need it for sliders. 
         ePanel = new EPanel(this); 
         cPane = getContentPane();
         cPane.add(ePanel); 
 
-        super.setKeyPanel(ePanel);
-
-        // setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
-
-        addVetoableChangeListener(new VetoableChangeListener()
-        // add listener to EJIF, ok frame closing: H&C vol 2 p.545
-        {
-            public void vetoableChange(PropertyChangeEvent event)
-            throws PropertyVetoException
-            {  
-               String name = event.getPropertyName();
-               Object value = event.getNewValue();
-
-               // Yikes! don't we want "closing" not "closed"?
-               // Nope. H&C V2 p.545 say vetoable state is "closed".
-               // For notification only, use "closing" H&C V2 p.547.
-
-               if (name.equals("closed") && value.equals(Boolean.TRUE) && bDirty)
-               {  
-                  if (!bExitOK())
-                    throw new PropertyVetoException("Cancelled", event);
-               }
-            }           
-        });
-
+        super.setKeyPanel(ePanel);  ///// what does this do?
+        myFile = new File(myFpath); 
+        bLoadFile(myFile); 
+        setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);  
         addInternalFrameListener(new InternalFrameAdapter()  
         {
-            public void internalFrameActivated(InternalFrameEvent ife) 
+            public void internalFrameClosing(InternalFrameEvent ife)
             {
-                // DMF.vMasterParse(true);  
-            }
-
-            public void internalFrameDeactivated(InternalFrameEvent ife) 
-            {
-                // DMF.vMasterParse(true); 
-            }
-
-            public void internalFrameClosed(InternalFrameEvent ife)
-            {
-                switch (myStackNumber) // cleanup: destroy this editor
+                if (bExitOK(getParent()))
                 {
-                    case 0: 
-                       DMF.oejif = null; 
-                       DMF.giFlags[OPRESENT] = 0; 
-                       break; 
-                    case 1: 
-                       DMF.rejif = null; 
-                       DMF.giFlags[RPRESENT] = 0; 
-                       break; 
-                    case 2: 
-                       DMF.mejif = null; 
-                       DMF.giFlags[MPRESENT] = 0; 
-                       break; 
+                    dispose();  // close here if OK. 
+                    ePanel = null; 
+                    switch (myFlavor) // cleanup DMF and ePanel.
+                    {
+                        case 0: 
+                           DMF.oejif = null; 
+                           DMF.giFlags[OPRESENT] = 0; 
+                           break; 
+                        case 1: 
+                           DMF.rejif = null; 
+                           DMF.giFlags[RPRESENT] = 0; 
+                           break; 
+                        case 2: 
+                           DMF.mejif = null; 
+                           DMF.giFlags[MPRESENT] = 0; 
+                           break; 
+                    }
                 }
-                ePanel = null; 
-                jmi1.setEnabled(true);
-                jmi2.setEnabled(true);
-                // DMF.vMasterParse(true); 
+                // bNeedsParse = true;  // alert BJIF ? yikes no blinker.
+                DMF.vMasterParse(true);  // direct action
             }
         });
        
-        // Prepare the startup file.
-        // Three possibilities: New, Chooser, AutoStartup
-        //        toOpen:        f     t        t
-        //        fname:         -     -      FILENAME.EXT
-
-        if ((ePanel != null) && toOpen)
-        {
-            if (myFpath.length() < 1)  // unspecified startup file
-            {
-                JFileChooser fc = new JFileChooser( );
-                String sDir = DMF.sCurrentDir; 
-                if (sDir != null)
-                {
-                   File fDir = new File(sDir); 
-                   if (fDir.isDirectory())
-                     fc.setCurrentDirectory(fDir);
-                }
-                fc.setFileFilter(new ExtFilter(myExt));     // H&C p.475
-                int result = fc.showOpenDialog(this);
-                if (result != JFileChooser.APPROVE_OPTION) 
-                {
-                    ePanel.vLoadSkeleton(); 
-                    myFpath = "blank" + myExt; 
-                    postEJIFtitle();
-                    return;
-                }
-                myFile = fc.getSelectedFile();  // no exceptions thrown here
-                DMF.sCurrentDir = myFile.getParent(); 
-                if (bLoadFile(myFile))          // includes file safety checks
-                {
-                    myFpath = myFile.getPath(); // not getName().
-                    postEJIFtitle();
-                    DMF.nEdits++; 
-                }
-                else
-                {
-                    JOptionPane.showMessageDialog(this, "Could not load file");
-                    ePanel.vLoadSkeleton(); 
-                    myFpath = "blank" + myExt; 
-                    postEJIFtitle(); 
-                }
-            }
-            else  /////////////// specified autoload "myFname"
-            {
-                myFile = new File(myFpath);  // no exceptions thrown here
-                if (bLoadFile(myFile))       // includes safety checks
-                {
-                    postEJIFtitle();
-                    DMF.nEdits++; 
-                }
-                else
-                {
-                    JOptionPane.showMessageDialog(this, "Could not load file");
-                    ePanel.vLoadSkeleton(); 
-                    myFpath = "blank" + myExt; 
-                    postEJIFtitle();
-                }
-            }
-        }
-        else  // startup with new skeleton...
-        {
-            ePanel.vLoadSkeleton(); 
-            myFpath = "";
-            postEJIFtitle(); 
-            DMF.nEdits++; 
-        }         
-        // DMF.vMasterParse(true);
         bDirty = false; 
         bNeedsParse = true; 
         
-    } /////end of constructor
+    } //-----end of constructor-----
 
 
     public String getFpath()
     // Essential to query myFile.getPath() for fresh information!
     // However, on opening a new table, myFile is null. 
+    // A179: Yikes the constructor initializes a temporary file "f" not myFile.
+    // A179: Eliminating "f" in favor of initializing myFile.
+    // Called when using File::Open
+    // Not called when using DnD.   Why? myFile is null!  Why?  Threads?
     {
         if (myFile != null)
           myFpath = myFile.getPath(); 
         else
           myFpath = "";
+        String path = U.getOnlyPath(myFpath); 
+        if (path.length() > 1)               // guard against zero length "New" file creation.
+          DMF.reg.putuo(UO_START, 5, path);  // stash it for future use.
         return myFpath;
     } 
 
@@ -342,10 +270,24 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
     // Extracts string from file; calls ePanel.vLoadString(). 
     // No internal smarts about EOL or CSV/Tab.
     // Analogous to doPasteInto(). 
-    // Needed improvements (A107): 
-    //   1. Limit load to size acceptable to extension.
-    //   2. Post a message if that limit is exceeded by file. 
     {
+        if (f ==null)
+        {
+            // System.out.println("EJIF bLoadFile() exiting; null file."); 
+            return false;
+        }
+        if (!f.exists())
+        {
+            // System.out.println("EJIF bLoadFile() exiting; nonexistent file. "+f.toString()); 
+            return false;
+        }
+        if (!f.canRead())
+        {
+            // System.out.println("EJIF bLoadFile() exiting; unreadable file. "+f.toString()); 
+            return false;
+        }
+        // System.out.println("EJIF bLoadFile() starting: file = "+f.toString());
+        
         try 
         {
            BufferedReader br = new BufferedReader(new FileReader(f)); 
@@ -357,10 +299,10 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
               sb.append("\n"); 
            } 
            br.close(); 
-          
            if (sb.length() < 2)
-             return false; 
-
+           {
+               return false; 
+           }
            String s = new String(sb); 
            ePanel.vLoadString(s, true);    // preclear=true.
            if (getNumLines() > maxrecords+2)
@@ -368,30 +310,11 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
            return true; 
         } 
         catch (IOException e) 
-        { return false; } 
+        { 
+            return false; 
+        } 
     }
 
-
-    class ExtFilter extends javax.swing.filechooser.FileFilter
-    {
-        String ext; 
-
-        public ExtFilter(String gext)     // mandatory constructor
-        {
-            ext = gext.toLowerCase();     // example: ".med"
-        }
-
-        public boolean accept (File f)    // mandatory method
-        {
-            return f.getName().toLowerCase().endsWith(ext)
-                  || f.isDirectory();
-        }
-     
-        public String getDescription()    // mandatory method
-        {
-            return sGetType() + " file "; 
-        }
-    }
 
 
     //-----------public methods, continued-----------
@@ -418,23 +341,12 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
 
     public String sGetType()
     {
-        switch (myExtNumber)
+        switch (myFlavor)
         {
-            case 0:  return ""; 
-            case 1:  return "OPT"; 
-            case 2:  return "RAY";
-            case 3:  return "MED";
+            case 0:  return "OPT"; 
+            case 1:  return "RAY"; 
+            case 2:  return "MED";
             default: return ""; 
-        }
-    }
-    
-    public void vSetMostRecent()
-    {
-        switch (myExtNumber)
-        {
-           case 1: DMF.sMostRecentFilePathOpt = myFpath; break; 
-           case 2: DMF.sMostRecentFilePathRay = myFpath; break; 
-           case 3: DMF.sMostRecentFilePathMed = myFpath; break; 
         }
     }
 
@@ -459,46 +371,6 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
           ePanel.setHorizontalPosition(hsb.getValue());
     }
 
-    public boolean bExitOK()
-    {
-        if (bDirty)
-        {
-            Object[] options = {"Don't close", "Abandon changes"}; 
-            int result = JOptionPane.showOptionDialog(
-                null,   // no parent frame
-                "Unsaved changes in "+myExt,
-                "Warning", 
-                JOptionPane.YES_NO_OPTION,
-                JOptionPane.QUESTION_MESSAGE, 
-                null,  // no custom icon
-                options, 
-                options[0]);  
-
-            switch (result)
-            {
-                case JOptionPane.YES_OPTION: return false; 
-                default: return true; // abandon OK.
-            }
-        }
-        return true; // always exit=OK if clean. 
-    }
-
-
-    public boolean bExitOKold()
-    {
-        if (bDirty)
-        {
-            String s = "Abandon unsaved work in " + myExt + " ?"; 
-            switch (JOptionPane.showConfirmDialog(null, s))
-            {
-                case JOptionPane.YES_OPTION: return true; 
-                case JOptionPane.NO_OPTION:
-                case JOptionPane.CANCEL_OPTION:
-                default: return false; 
-            }
-        }
-        return true; 
-    }
 
     public boolean areYouDirty()
     {
@@ -520,28 +392,32 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
         if (ePanel == null)  // should never happen
           return; 
         JFileChooser fc = new JFileChooser( );
-        String sDir = DMF.sCurrentDir; 
-        if (sDir != null)
-        {
-            File fDir = new File(sDir); 
-            if (fDir.isDirectory())
-              fc.setCurrentDirectory(fDir);
-        }
-        fc.setFileFilter(new ExtFilter(myExt));     // H&C p.475
+        fc.setDialogTitle("Save As");         
+        File fDir = new File(myPathOnly);
+        if (fDir.isDirectory())
+          fc.setCurrentDirectory(fDir); 
+        FileNameExtensionFilter fnef = new FileNameExtensionFilter(myExt, myExt); 
+        fc.setAcceptAllFileFilterUsed(false); 
+        fc.addChoosableFileFilter(fnef); 
+        // fc.setFileFilter(new ExtFilter(myExt)); // old way, H&C p.475 now obsolete
         int result = fc.showSaveDialog(this);
         if (result != JFileChooser.APPROVE_OPTION)
           return; 
         myFile = fc.getSelectedFile(); 
         if (myFile.exists() && !myFile.isFile())
-          return;   // probably a directory.
+          return;   // probably a directory. Bail out.
 
         // we have a definite selection...
         DMF.sCurrentDir = myFile.getParent(); 
-
+        // System.out.println("EJIF pleaseSaveAs() setting sCurrentDir = "+DMF.sCurrentDir); 
+        
         // If no name or extension, supply one...
         String fp = myFile.getPath(); 
         if (fp.length() < 1)           // no name
-          fp = "noname"; 
+        {
+            // System.out.println("EJIF pleaseSaveAs() has no file name.  Assigning 'noname'."); 
+            fp = "noname"; 
+        }
 
         // paths may legally contain periods. Do not use period test to find extension.
 
@@ -558,11 +434,30 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
             if (iq != JOptionPane.YES_OPTION)
               return; 
         }
-        if (ePanel.save(myFile))
+        if (ePanel.save(myFile))   // successful!
         {
             bDirty = false; 
-            myFpath = myFile.getPath();
-            vSetMostRecent();             
+            myFpath = myFile.getPath();          
+            String ext = U.getExtensionToLower(myFpath); 
+            // System.out.println("EJIF pleaseSaveAs() saved extension = "+ext); 
+            
+            //---update the recent file list----
+            if (ext.equals("opt"))
+            {
+                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath); 
+                DMF.addRecent(0, myFpath);
+            }
+            if (ext.equals("ray"))
+            {
+                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath);
+                DMF.addRecent(1, myFpath); 
+            }
+            if (ext.equals("med"))
+            {
+                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath); 
+                DMF.addRecent(2, myFpath); 
+            }
+            
             iCountdown = 5;  // posts "Saved" message
             return; 
         }
@@ -575,12 +470,14 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
         if (ePanel == null) 
           return; 
         if (myFile == null)
-          pleaseSaveAs(); 
+        {
+            // System.out.println("EJIF pleaseSave() has myFile = null; calling pleaseSaveAs()."); 
+            pleaseSaveAs(); 
+        }
         if (ePanel.save(myFile))
         {
             bDirty = false; 
             myFpath = myFile.getPath(); 
-            vSetMostRecent(); 
             iCountdown = 5;  // posts "Saved" message
             return; 
         }
@@ -916,8 +813,6 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
         s += "       " + sGetType() + "editor"; 
         setTitle(s); 
     }
-
-
 } //-----------------ends EJIF class-----------------
 
 

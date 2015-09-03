@@ -27,11 +27,10 @@ class OEJIF extends EJIF
     // public, so that DMF can check validity against MEJIF.mglasses[].
 
 
-    public OEJIF(int x, JMenuItem gjmi1, JMenuItem gjmi2, 
-     boolean toOpen, String gfname, int gmaxrec) 
+    public OEJIF(int iXY, String gfname) 
     {
-        super(0, x, ".OPT", gjmi1, gjmi2, toOpen, gfname, gmaxrec); // call EJIF
-        myFpath = gfname; 
+        super(0, iXY, ".OPT", gfname, MAXSURFS); // call EJIF
+        myFpath = gfname; // field of EJIF.
     }
 
 
