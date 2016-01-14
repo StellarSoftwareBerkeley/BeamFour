@@ -1,4 +1,1305 @@
 
+19 Dec 2015:  A190: Running Biconic
+Biconic uses CurvX, AsphX, CurvY, AsphY.
+OEJIF ternary logic gets iProfile=4; OSXCYL.
+
+
+19 Dec 2015: What to do about Options::AutoAdjust
+  weight Xgoal, weight Ygoal, ...   ?
+  13 Jan 2016 deleting these options. 
+
+
+18 Dec 2015:  A190: What curvature logic drives polynomial cylinders?
+Classification is done in OEJIF starting at line 440; installed diagnostic display.
+Test vehicle is T-Cylinder.OPT with nonzero A1, A3 entries.  Nine cases:
+Headers:   Curve   Cx
+           ------:-------- 
+           blank   blank     ...OSPLANO  poly is circularly symmetric
+            0      blank     ...OSPLANO  poly is circularly symmetric  
+            0.01   blank     ...OSCONIC  poly is circularly symmetric
+           blank   0         ...OSPLANO  poly is circularly symmetric
+            0      0         ...OSPLANO  poly is circularly symmetric
+            0.01   0         ...OSYCYL   poly is cylindrical "S", axis=X
+           blank   0.01      ...OSXCYL   poly is "S" in y, circular curved in X
+            0      0.01      ...OSXCYL   poly is "S" in y, circular curved in X
+            0.01   0.01      ...OSTORIC  poly is "S" in y, circular curved in X
+
+In other words...
+Headers:   Curve   Cx
+           ------:-------- 
+           blank   blank     ...OSPLANO  poly is circularly symmetric in r      "CircPoly"
+           blank   0         ...OSPLANO  poly is circularly symmetric in r      "CircPoly"
+           blank   0.01      ...OSXCYL   poly is "S" in y, circular curved in X "ToricPoly"
+
+            0      blank     ...OSPLANO  poly is circularly symmetric in r      "CircPoly"
+            0      0         ...OSPLANO  poly is circularly symmetric in r      "CircPoly"
+            0      0.01      ...OSXCYL   poly is "S" in y, circ in X, axis=Y    "ToricPoly"--bullet 2
+
+            0.01   blank     ...OSCONIC  poly is circularly symmetric in r      "CircPoly"
+            0.01   0         ...OSYCYL   poly is cylindrical "S" in y, axis=X   "Cylind-Y" --bullet 1
+            0.01   0.01      ...OSTORIC  poly is "S" in y, circular curved in X "ToricPoly"--bullet 3
+
+       Curve :   blank        0      nonzero
+-------------:---------------------------------
+Cx = blank   :  CircPoly   CircPoly  CircPoly
+Cx = 0       :  CircPoly   CircPoly  Cylind-Y 
+Cx = nonzero :  ToricPoly  ToricPoly ToricPoly
+
+"Polynomials: these are available in circular form (i.e. functions of radius r)
+and in cylindrical form (i.e. functions of y alone, not x).  Choice is governed
+by the "Cx" field being empty, zero, or nonzero.  
+
+1. With "Cx" being absent, or blank, we get a circularly symmetric polynomial in "r" (eqn MM).
+
+2. With "Cx" being set to zero, we again get a circularly symmetric polynomial in "r",
+    unless "Curve" is set nonzero: this mismatch forces a cylinder, axis=X and
+    polynomial is a function of y: conic + polynomial  (eqn NN).
+
+3. With Cx nonzero, we obtain the full set of toric polynomials: circular in
+   the XZ plane and conic + polynomial in the YZ plane. 
+
+Other headers show that Cy is ignored:
+Headers:   Curve   Cy
+           ------:--------
+           blank   blank     ...OSPLANO
+            0      blank     ...OSPLANO
+            0.01   blank     ...OSCONIC
+           blank   0         ...OSPLANO
+            0      0         ...OSPLANO
+            0.01   0         ...OSCONIC  <<< Cy is ignored
+           blank   0.01      ...OSPLANO
+            0      0.01      ...OSPLANO  <<< Cy is ignored
+            0.01   0.01      ...OSCONIC  <<< Cy is ignored
+
+Headers:   Cx      Cy       <<< Biconic.OPT uese this pair
+           ------:--------
+           blank   blank     ...OSPLANO
+            0      blank     ...OSPLANO
+            0.01   blank     ...OSXCYL   <<< Cy is ignored? No: Biconic runs OK
+           blank   0         ...OSPLANO
+            0      0         ...OSPLANO
+            0.01   0         ...OSXCYL   <<< Cy is ignored? NO: Biconic runs OK
+           blank   0.01      ...OSPLANO
+            0      0.01      ...OSPLANO
+            0.01   0.01      ...OSXYL    <<< Cy is ignored? NO: Biconic runs OK
+
+Apparent Rules, A190:
+PolyCyl: requires axis=x, Cx=0 (uncurved in XZ plane), Curve=Nonzero, poly in y: OSYCYL.
+CircCyl: can have axis=x, Cx=0 (uncurved in XZ plane), Curve=Nonzero, no poly;  OSYCYL.
+CircCyl: or have  axis=y, Cx=nonzero, Curve=blank or zero, no poly terms:  OSXCYL
+Toric:   requires Curve=nonzero, Cx=nonzero. 
+
+
+Shell scripts:
+in A190, a.sh fails to compile.  It has two lines:
+
+    javac -version
+    javac -Xlint com/stellarsoftware/beam/*.java
+
+in A166_working, a.sh succeeds.  It has one line:
+
+    javac -Xlint com/stellarsoftware/beam/*.java
+
+Copying a.sh from A166_working into A190, a.sh runs OK!
+And runs OK with added line "javac -version"  -- no difference!
+
+Adopting this bash script in A190...  runs OK:
+
+echo "...To set compiler version..."         # handy reminder
+echo "source ~/.profile"
+echo "setJDK6"    
+echo "...Obtaining compiler version..."      # inform the user
+javac -version
+echo "...Compile with Xlint..."              # inform the user
+javac -Xlint com/stellarsoftware/beam/*.java
+
+
+
+17 Dec 2015  A190: Removing absolute values of |y| in cylindrical polynomials
+..  so that a true smooth polynomial cylinder can be constructed. 
+..  Requested by John Hart 15 Dec
+..  Installed into Z.java; seems to work using "S-Cylinder" demo files
+..  Posted at MikeLampton.com to John Hart 17 Dec; he acknowledges receipt, approved 18 Dec.
+
+
+
+2 November 2015  A190  Introducing weights for AutoAdjust
+ -not done.
+ -options removed 13 Jan 2016.
+
+
+19 Oct 2015: A189 7 October running E22 files
+Edit::Paste sometimes gets wrong destination if caret is keystroked to desired location, 
+yet always gets correct destination if caret is placed by mouse click.
+In both cases the "Row=NN" display at top of editor shows correct caret row. 
+
+
+8 Oct 2015: prospective new feature: set & fix a Layout pixel scale.
+But wait. What is "Sticky Pan/Zoom? Ah: if you do not pan or zoom, can
+dismiss Layout, then make changes, then do a new Layout: same pan zoom!
+Very nice, this is what I want, already implemented.  
+
+
+7 October 2015 afternoon  A189
+Yikes, now the command line javac -Xlint com/stellarsoftware/beam/*.java
+fails; not just the bash script "a.sh".  
+
+Rebooting solves this problem.
+Rebooting does not solve bash script "a.sh" failure. 
+Bash scripts "b.sh" and "c.sh" work just fine. 
+Yet, moving to A166_Working, bash a.sh runs OK.  Why? In A166_working, a.sh is simply:
+
+    javac -Xlint com/stellarsoftware/beam/*.java
+
+7 October 2015 Two problems with Angles and {i,j,k}
+
+1. These use the -Z normal on mirrors.  Should always use the
+  incoming normal, so that incoming angles are w.r.t. incoming normal.
+  RT13.vGetPerp() uses Z.vGetZnorm();
+  Previous Z.vGetZnorm() starts with norm[2]=-1; 
+  Changing Z.vGetZnorm() to start with norm[2]=1.
+  This requires that the unnormlized norm[0]= -dZ/dx and norm[1]=-dZ/dY.
+  Since there are two opposite normals, I guess posting Angle that
+  is 0<a<90 should suffice.  
+  ^^ Done in RT13.vSetAngle() line 1851. Looks OK, except "k" is negative.
+     k would be positive if we had the +Z normal sense. 
+  But still best to get to the origin of the need for norm[2]=-1.
+
+2. These should get posted for all incoming rays, not just those that
+are OK outgoing. 
+
+
+
+
+6 October 2015  A189, yikes shell script a.sh has broken.
+bash a.sh  :
+   "javac: invalid flag: -version
+   Usage: javac <options> <source files>
+   use -help for a list of possible options
+   javac: invalid flag: com/stellarsoftware/beam/*.java
+   Usage: javac <options> <source files>
+   use -help for a list of possible options"
+
+Yet, typed by hand, javac -version reports proper version....
+   "javac 1.6.0_65"
+
+And,typed by hand, javac -Xlint com/stellarsoftware/beam/*.java  compiles OK.
+Also, bash c.sh works properly: jars the application as it should. 
+
+Moving to another directory /Java/TripleTest, running the shell script a.sh
+   javac -version
+   javac *.java
+works OK, revealing JDK=1.8.0_20 so the 1.6.0_65 has been lost. 
+
+Returning to A189, c.sh is still OK under JDK8, a.sh is still broken.
+Strange. 
+
+
+
+5 October 2015  A188 "Angle" output is sometimes not zero:
+ ... in Rowland.OPT, where all rays start at the center of curvature
+ of the concave grating, all angles "A1" ought to be zero.
+ Most of them are. but a few are +0.000000853773 degrees.  ?!?
+This angle is obtained in RT13::vSetAngle() line 1852 using U.arccosd(dotProduct).
+The arc cosine has infinite slope at x=1, U parallel to Norm, therefore limited accuracy.
+Slightly better is U.arcsind(crossProduct) that is linear for U parallel to Norm,
+hence good accuracy, but it blows up at U perp Norm.
+Better still is the full angle resolver arctan2(crossProduct, dotProduct)
+that is well behaved everywhere, zero and infinity are OK. 
+PLAN: Write and Test a generally good angle finder. U.getAngle()...
+^^ Done; see Java/TripleTest.
+^^ Modified RT13::vSetAngle() line 1852 to use Triple::getAngle(). 
+
+
+5 October 2015  A188 Layout Radial Arcs vanish if Gx is nonzero
+ ... as if Gx interferes with drawing radial arcs.
+ ... peripheral arcs are OK. 
+ ... see Rowland.OPT
+
+
+18 Sept 2015:  "Save" flag misbehavior
+If I save a dirty file using Cmd-S, it saves OK, but upon exitting,
+I get the dirty flag dialog, as if Cmd-S fails to clear that flag.
+^^ Hmmm: EJIF line 468 appears to properly clear that flag. 
+^^ Hmmm: DMF does not have any bDirty flags.  Its vMasterExit checks its BJIFs.
+^^ Hmmm: BJIF has an abstract method bExitOK() for each EJIF to implement. 
+^^ Hmmm: EJIF's bExitOK() returns true if !bDirty.  Should work!
+
+
+
+17 Sept 2015  A188
+Oddity in Layout: Displaying Hyper, all surface arcs display properly.
+But displaying Transmission, the first surface NSEW fail to display on surface 1
+while all peripheral arcs are OK and all radial arcs are OK on surfaces 2 and up.
+Same problem with refractor shading on or off so it is not a shading issue. 
+
+
+
+16 Sept 2015  A188 installing new class Triple, simplifying iTG routines.
+iTG should replace iSnell, a further simplification.
+^^ Done.  Also added HOE; tests OK. 
+
+
+14 Sept 2015  A187 Reverting to Old Hierarchy, for portability. 
+  Eliminated /sources and /classes subfolders.
+  Moved /com into project root;
+  Sources and classes are all found in /com/stellarsoftware/beam.
+  Modified a.sh (still won't work but command line is OK)
+  Modified b.sh, c.sh, d.sh -- all these work OK
+  ^^ and now: BEAM4U.jar is portable, runs anywhere.    (whew)
+
+
+
+
+14 Sept 2015: "The java JAR file 'BEAM4_186_1.6.0.jar' could not be launched.
+  Check the Console for possible error messages.  [OK]"
+
+Within A186, double clicking BEAM4U.jar or BEAM4_186.1.6.0.jar works.
+Copies of them in /General/Web fail to run with this message.
+Copies of them downloaded from MikeLampton.com, in Downloads, also fail.
+Somehow the .jar files have become location dependent!
+
+Older compiles like BEAM4_184_1.6.0.jar double click and run anywhere. 
+Could my new file system have messed up some key library information?
+New files = 290kB; older files = 290kB.  Not much can be missing! 
+
+In A186, bash b.sh "java -cp classes com.stellarsoftware.beam.B4" works;
+In A186, bash d.sh "java -jar BEAM4U.jar"  works; entrypoint OK; 
+In A186, trying "java BEAM4U.jar" fails:
+   "Error: Could not find or load main class BEAM4U.jar"
+Could this nonportability be some failure in my manifest?
+Could this nonportability be a consequence of my new file hierarchy?
+ Maybe!  185 is similarly nonportable!
+Drop the terminal "/" in "classes/" in manifest: compiles, and runs, and jars,
+but Yikes, bash d.sh "Error: could not find or load main class com.stellarsotware.beam.B4"
+Replace that "/" and bash d.sh runs OK.
+A185 BEAM4U.jar double clicks OK within A185
+A185 BEAM4U.jar double click fails when moved to Downloads. 
+
+Could reverting to a simpler hierarchy eliminate this nonportability??
+
+
+14 Sept A186:  Bash script failure in a.sh
+In A173, a.sh script contains one line, and it runs OK:
+
+    javac -Xlint com/stellarsoftware/beam/*.java
+
+In A185_Mac, a.sh script contains six lines (one is blank), and it runs OK: 
+no error messages about the blank line nor the compiler:
+
+    # Compiler needs explicit direction to source files.
+    # Compiler "-d" destination hierarchy follows the package specification;
+    #   here "classes" is the headwater of com.stellarsoftware.beam 
+    #
+
+    javac -Xlint -d classes sources/com/stellarsoftware/beam/*.java
+
+In A185_Mac_PC, a.sh script is five lines (one is blank), and it runs OK once:
+no error messages about the blank line nor the compiler:
+
+    # Compiler needs explicit direction to source files.
+    # Compiler "-d" destination hierarchy follows the package specification;
+    #   here "classes" is the headwater of com.stellarsoftware.beam 
+
+    javac -Xlint -d classes sources/com/stellarsoftware/beam/*.java
+
+but on subsequent tries, it fails (same a.sh!) with two error messages:
+
+    : command not found
+    javac: invalid flag: sources/com/stellarsoftware/beam/*.java
+    Usage: javac <options> <source files>
+    use -help for a list of possible options
+
+The first error message is a complaint about the empty line.
+This complaint was absent on the initial run today, or last week.
+The second error message reports an invalid flag in the compiler.
+Yet it works OK when typed into the command line bypassing bash.
+The sources directory hierarchy here is the same as in A185_Mac.
+The classes directory hierarchy here is the same as in A185_Mac.
+
+Temporary fix is to copy and paste the javac command into the command line.
+Works.  strange.  The other bash scripts b.sh, c.sh, and d.sh work fine.
+
+In A186, a.sh has just one line:
+
+    javac -Xlint -d classes sources/com/stellarsoftware/beam/*.java
+
+which triggers the compiler error message...
+
+    javac: invalid flag: sources/com/stellarsoftware/beam/*.java
+    Usage: javac <options> <source files>
+    use -help for a list of possible options
+
+186, trying an enlarged a.sh shell script:
+
+    javac -version
+    javac -Xlint -d classes sources/com/stellarsoftware/beam/*.java
+
+This produces two error messages, as if javac is unavailable:
+
+    javac: invalid flag: -version
+    Usage: javac <options> <source files>
+    use -help for a list of possible options
+    javac: invalid flag: sources/com/stellarsoftware/beam/*.java
+    Usage: javac <options> <source files>
+    use -help for a list of possible options
+
+Yet, again, javac -version works fine on the command line. 
+And, b.sh, c.sh, d.sh continue to work OK as well.  
+
+
+13 Sept A186 addressing TransmissionGrating error
+
+Problem is that diffracting into a non-vacuum medium, the diffraction angle
+is not attenuated by that final medium.
+
+Should be:     N2*sin(beta) = N1*sin(alpha) + M*G*lambda
+but acts like  N2*sin(beta) = N1*sin(alpha) + N2*M*G*lambda
+
+Testing with BacksideTGTest.OPT; compare Excel BacksideTGTest.xls
+
+Revising RT13 iSnell() to agree with Spencer & Murty's "gamma" notation.
+Previous iTgrating() routine was simply iGrating() then iSnell().
+That has both a sequence error and a conceptual refraction error.
+
+Test plan should include eight cases:
+
+FwdFrontTG with Gx and Gy, U0 and V0   TG is surface 1
+FwdBackTG  with Gx and Gy, U0 and V0   TG is surface 2
+RevFrontTG with Gx and Gy, U0 and V0   TG is surface 2
+RevBackTG  with Gx and Gy, U0 and V0   TG is surface 3
+
+The reverse (Z decreasing) tests use a single initial reversing mirror
+to reverse the rays prior to passing through the TG.  They assure
+that the signs of Wfinal are correctly managed. 
+
+
+
+ 
+13 Sept A186 addressing InitialFinalMedia bug
+
+If ALL media in an optics table have a defined index, say 2.0, 
+then Ufinal should remain in that medium, but it refracts into vacuum!
+^^ Created InitialFinalIndexTest.OPT and .RAY
+^^ Reveals TIR failure from transition to vacuum
+^^ There should be NO transition to vacuum.
+^^ Error was found RT13, getRefraction() line 601-602 limits jsurf <= nsurfs.
+^^ Works. 
+
+
+
+9 Sept 2015  A185  New parallel file system.
+  Seems to work:  sources and classes are now separated. 
+  Mac and PC editions both compile and run. 
+  See M.Lampton "Java Folder Hierarchy: Compiling and Testing"
+
+
+31 August 2015   A184 and the UnderScoot problem
+There are two ways to install a Desktop.
+   1. Replace the native contentpane with a JDesktopPane, then add JMenuBar.
+or
+   2. Add the JMenuBar and a JDesktopPane to the native contentpane.
+
+It might be the case that 1 underscoots but 2 does not because its workspace
+excludes the MenuBar. 
+
+Or, it might be the case that 1 does not underscoot because JDP knows about JMenuBar.
+
+In A184/DMF, I use method 1; "this" means this JFrame; it requires Headroom.
+
+        jdp = new JDesktopPane(); 
+
+        // Headroom here is mandatory to eliminate underscoot
+        jdp.setDesktopManager(new HeadroomDesktopManager());
+        .....
+        this.setContentPane(jdp);
+        this.setJMenuBar(menubar); 
+
+In /Java/Desktop, Underscoot.java uses method 2 and also needs Headroom:
+
+        Container contentPane = getContentPane(); 
+        JMenuBar menuBar = new JMenuBar();
+        setJMenuBar(menuBar); 
+        jdp = new JDesktopPane();    
+        contentPane.add(jdp, BorderLayout.CENTER);
+
+        // Headroom here is mandatory to eliminate underscoot
+        jdp.setDesktopManager(new HeadroomDesktopManager()); 
+
+        jdp.setDragMode(JDesktopPane.OUTLINE_DRAG_MODE); 
+        jdp.setOpaque(true);  // false);
+
+Result: either way underscoots unless a HeadroomDesktopManager is installed. 
+
+
+26 August 2015   A184: persistent rays
+When I close my .RAY editor, I expect the rays to vanish.
+They do not: a pre-existing layout still traces them.
+as if the master parser has not been alerted to the disappearance
+of the ray information.  However if I click the Run menu, then
+I get the report "Ray Table is Absent" although the on-screen
+Layout continues to show its rays. 
+ ^^ Added bNeedsParse = true to EJIF exit routine.
+Oooops: when the window exits, the blinker is off!
+Better to directly beg DMF for its vMasterParse(true).
+^^ works.  
+
+The Run::Random progress dialog needs the same Container treatment
+that my new three-button dirty exit has: it presently likes to go outside
+of the B4 desktop. 
+ ^^ Gave my JDialog with DMF.dmf as the working JFrame. 
+ No joy, works the same.
+
+
+25 August 2015  A184: Scooting Under
+Testing reveals that there is still a way to have UnderScoot,
+in spite of my new desktop manager.  Do this: 
+  1. Run B4 and load some files.
+  2. Drag the main frame display upwards, making insufficient height.
+  3. Click and drag any internal frame...
+  ...it will jump upwards, safeguarding its bottom, but hiding its top.
+Ha, a much simplified BoundedDesktopManager fixes this:
+
+    public void setBoundsForFrame(JComponent f, int x, int y, int w, int h) 
+    {
+        y = Math.max(y, 1); 
+        f.setBounds(x, y, w, h); 
+    }      
+    
+
+25 August 2015  A184: MAXBUNCH = 10000 in B4constants.java.
+used to be 1000 random rays max per refresh
+Now at customer request raised to 10000.
+
+There's still a bug in the dirty exit logic:
+Dirty flag is detected, but "Cancel" at the window exit button
+discards the editor.  
+
+Did I forget EJIF's DO_NOTHING_ON_CLOSE?
+Yup.  Fixed.  Works.
+
+
+24 August 2015  A183, 184: Improved exit logic:
+
+1. Converted bTryClosing() into bExitOK():
+  false means cancel, otherwise dialog save and return true; 
+2. Eliminated dispose() from bExitOK
+  -- dispose within EJIF only if locally called and OK; 
+  -- GJIF is always OK yet never disposes.
+  -- vMasterExit does not bother with dispose(): it exits if no cancels.
+Bail out of vMasterExit at the very first cancel.
+A184 has improved cleanup logic in EJIF's close listener.
+^^ Done: works. 
+
+A184: increased Random maxBunch to one million (was one thousand). 
+
+Java release history:  https://en.wikipedia.org/wiki/Java_version_history
+Through 1.6.0_21: July 2010, from Sun Microsystems.
+At 1.6.0_22 and above: Oct 2010 from Oracle Corporation
+
+===Test notes on release 182, 23 August 2015 various machines====
+My MacBook Air, Mac OS X 10.9.5, JRT 1.6.0_65 is OK; 
+  however JRT7 and 8 crash when MacOS iconified.
+  Glad I installed that permission switch!
+
+Susan’s Retina MacBook  Mac OS X 10.9.5,  JRT 1.6.0_65, runs great. 
+
+Susan's non-Retina MacBook Pro 10.6.8 JRT 1.6.0_65, runs great.
+
+Susan's hp Windows XP JRT 1.6.0-11
+offers metal, nimbus, cde/motif, windows, windows classic.
+All of them minimize and maximize ok.
+
+Mike's Lenovo ThinkPad, Win Seven Pro SP1, JDK 1.6.0_21, JRT 1.6.0_38
+Works great.
+
+
+23 August 2015  A182: modifying three button action on dirty exit:
+instead of H&C's VetoablechangeListener (which gives me two successive
+exit dialogs, and refuses to consume!) I am trying something simpler...
+
+  "Cancel"  uses built in DO_NOTHING_ON_CLOSE,
+  "Abandon" uses dispose() method,
+  "Save"    calls pleaseSave() then dispose().
+
+Development vehicle for 3-button permissions:  /Java/Desktop/ExitOK.java
+
+With multiple windows there are (at least) two approaches to main exit cleanup:
+1. Cancel on a dirty file should retain all editor files including clean ones.
+2. Cancel on a dirty file should drop all clean files.
+
+I have adopted #2.  Works well.
+
+One customer prefers #1.  Should be easy to change:
+MasterExit should first poll all editors, draw up a list of dirties,
+poll user for each dirty & save the responses, then...
+  if any = cancel, abort the exit; 
+  if any is save&exit, save but do not exit;
+
+
+
+Under 1.6.0_65 (JRT6), MacOS minimization works beautifully: lower left corner.
+Under 1.7.0_67 (JRT7) or 1.8.0_20 (JRT8), minimization crashes. 
+Default MacOS Icon permission is OFF: see Options::StartupFiles::MacOS.
+My Mac OS X is 10.9.5
+
+22 August 2015 A180, 181:
+User report that B4_180_1.6.0 posted at MikeLampton.com
+crashes on minimizing a MacOS window, unlike my experience.
+So the controlling crash factor is not simply JRT6: it is perhaps
+a finer build number, or a foreign release.
+
+Better is to lock out minimize on all MacOS windows, all JRTs:
+  existing ones, via Options::LookAndFeel, via inflate() and deny;
+  remember to reallow minimization going to non MacOS L&Fs; 
+  new ones, via BJIF deny. 
+
+Alternative: introduce a User Option allowing/forbidding MacOS L&F iconify.
+Supply a brief text caution for crashy behavior.
+^^ Done; works nicely.
+
+Root of the problem lies in applying a MenuBar to a JDesktopPane.
+The MacOS style is to put the menubar at Top-of-Screen, and not
+use the top-of-frame; this way the default desktop manager works OK
+with no slipping underneath the menubar. 
+The Java style (also linux and Windows) is to let each app have its
+own menubar. 
+
+
+21 August A180: Applying smooth bounds manager to DMF;
+test vehicle is /Java/InternalFrames/Test3.java.
+All compiles use JDK6 since MacOS minimizer crashes under JDK8.
+All runs use JRT6 since MacOS minimizer crashes under JRT8.
+Smooth limiter avoids under scooting the MenuBar.
+
+^^ Works, but needs to be made selective among L&Fs:
+When changing to MacOS L&F, preinflate all JIFs lest icons vanish.
+^^ Done, works.
+Then if JRT>6, forbid minimization of all JIFs. 
+For new BJIFs constructed with MacOS L&F and JRT>6, forbid minimization.
+
+
+
+Installing three button dirty editor exit tool:
+"Abandon"  "Return"  "Save and Exit": EJIF line 373. 
+^^ Works. Nice to have. 
+
+
+
+
+20 August 2015  A179: Possible lead on How To Write Desktop Manager methods:
+http://docs.oracle.com/javase/7/docs/api/javax/swing/DesktopManager.html
+
+"DesktopManager objects are owned by a JDesktopPane object. They are responsible 
+for implementing L&F specific behaviors for the JDesktopPane. JInternalFrame 
+implementations should delegate specific behaviors to the DesktopManager. 
+For instance, if a JInternalFrame was asked to iconify, it should try:
+
+    getDesktopPane().getDesktopManager().iconifyFrame(frame);
+ 
+"This delegation allows each L&F to provide custom behaviors for desktop-specific 
+actions. (For example, how and where the internal frame's icon would appear.)
+This class provides a policy for the various JInternalFrame methods, it is not 
+meant to be called directly rather the various JInternalFrame methods will 
+call into the DesktopManager."
+
+http://www.coderanch.com/t/545927/GUI/java/JInternalFrame-iconifying-size
+...shows how to set bounds for an iconified JInternalFrame.
+
+http://www.coderanch.com/t/545930/GUI/java/JInternalFrame-iconifying-position
+...shows how to set icon position.
+
+http://www.coderanch.com/t/333623/GUI/java/internal-frame-problems
+...deals with disappearing icons  "moveToFront()".
+
+http://stackoverflow.com/questions/6916163/jinternalframe-minimize-while-maintaining-current-location
+...shows how to subclass javax.swing.DefaultDesktopManager and create a CustomDesktopManager,
+   and override its iconifyFrame() method with a new one.
+
+http://stackoverflow.com/questions/8136944/preventing-jinternalframe-from-being-moved-out-of-a-jdesktoppane
+...shows how to limit drag motions of a JInternalFrame.
+
+https://docs.oracle.com/javase/tutorial/uiswing/events/internalframelistener.html
+...shows how to write an internal frame listener, capturing internal frame events.
+
+http://www.java2s.com/Tutorial/Java/0240__Swing/ListeningtoInternalFrameListener.htm
+...shows how to write an internal frame listener.
+
+
+
+
+
+
+User request ThreeButton dirty-file-exit dialog: [abandon], [return], [save & exit].
+
+
+
+19 August 2015  A179: MacOS L&F "minimize" bottom-center vs bottom-left issue:
+
+In A176, a new L&F was installed into Options;  one difference noted:
+  A173 included serialVersionUID = 42L;  not in A176.  (Cannot matter!)
+
+User report is that under A173, Java 1.6, "minimize" was bottom-left.
+To force a .jar to use selected <local> Java runtime, use java -jar FILENAME.jar
+
+Factory testing as follows:
+
+Compiler:   B4173_1.5.0 on Lenovo/WinSeven; others on MacOS 10.9.5.
+
+Windows Javac 1.5.0 cannot compile B4_179:  "FileNameExtensionFilter" does not exist. 
+Windows Javac 1.6.0 succeeds to compile B4_179; Works great with native Windows L&F. 
+
+Now exploring the Mac OS L&F and its "minimize" behavior....
+
+Compiled on Lenovo w/ javac 1.5.0_22, running on Mac OS...
+
+MacOS 10.9.5 w/ java 1.8, B4_173_1.5.0: B4 runs; "minimize" vanishes and crashes.
+MacOS 10.9.5 w/ java 1.6, B4_173_1.5.0: B4 runs; "minimize" works: lower left corner.
+
+Compiled on MacOS 10.9.5 with various javac compilers....
+
+===RELEASE 173===
+MacOS 10.9.5 w/ java 1.8, B4_173_1.6.0: B4 runs; "minimize" vanishes and crashes. 
+MacOS 10.9.5 w/ java 1.6, B4_173_1.6.0: B4 runs; "minimize" works, lower left corner.
+MacOS 10.9.5 w/ java 1.8, B4_173_1.8.0: B4 runs; "minimize" vanshes and crashes.
+MacOS 10.9.5 w/ java 1.6, B4_173_1.8.0: B4 will not run "UnsupportedClassVersion"
+
+===RELEASE 179===
+MacOS 10.9.5 w/ java 1.8, B4_179_1.6.0: B4 runs; "minimize" works, bottom center.  
+MacOS 10.9.5 w/ java 1.6, B4_179_1.6.0: B4 runs; "minimize" works, bottom center. 
+MacOS 10.9.5 w/ java 1.8, B4_179_1.8.0: B4 runs; "minimize" works, bottom center.  
+MacOS 10.9.5 w/ java 1.6, B4_179_1.8.0: B4 will not run "UnsupportedClassVersion"
+
+The sole "lower left corner" I find is to compile 173 on javac 1.6.0 and offer it
+to only java 1.6 installation users. Earlier users will refuse to run B4_1.6.0, and
+later users will crash  upon trying a "minimize."
+
+The only way to have a noncrashy single product release seems to be to
+accept the bottom center minimize, which I do not like. 
+
+
+18 August 2015  A179: Experiments with Version/ShowVersion.java
+With setJDK6:
+
+   running command line "java ShowVersion"  gives 1.6.0_65
+   while double clicking "ShowVersion.jar"  gives 1.8.0_51
+   command line "java -jar ShowVersion.jar" gives 1.6.0_65
+
+I conclude that double clicked jars can discover & use latest JDK,
+while command line starts do not allow this freedom.
+
+Test B4 java sensors with the command line jar test. 
+
+To switch to JDK6 on my Mac:
+
+    source ~/.profile
+    setJDK6           
+
+java -version  then reports 1.6.0
+
+To edit the .profile,  open -e ~/.profile
+... see /Computer/SelectableJavaReleases.txt
+
+
+
+15 August 2015  A179
+
+Hmmm, Drag-n-Drop has to ask for a filename when I hit Command-S "Save"
+as if the DnD file details are unknown to EJIF (where the "Save" is implemented.
+It is not just DnD; Save always reverts to SaveAs as if EJIF never receives
+a valid filename. 
+
+Aha: EJIF constructor fails to initialize its "myFile" variable.  
+  ^^ Trying initialization of global "myFile" -- ha this works, now Cmd-S
+knows what the file is when loaded, does not revert to SaveAs.
+
+
+14 August 2015   A179
+
+Hmmm, SaveAs fails to update RecentFiles and therefore the
+autoLoad fails to grab the Very Latest Edition.
+Fixed:  EJIF now calls DMF.addRecent() for each successful save. 
+
+
+
+
+13 August 2015  A179
+
+Improved DMF "File::Open" starts at most recent folder for Opt, Ray, or Med;
+also EJIF "SaveAs" starts at most recent folder for Opt, Ray, or Med.
+default no-recent-memory situation is moved to User.home, not local.dir; 
+Autoloads offer choice of "none" or "most recent".
+
+Compiles without error under Javac 1.8
+Fails to compile under Javac 1.5: evidently FileNameExtensionFilter does not exist.
+Its old replacement was discarded because it poisons the yellow "minimize" button.
+docs.oracle.com says FileNameExtensionFilter is available "since 1.6"
+
+I already have Javac 1.6 installed on my Lenovo Windows Seven.
+Java 1.6 is the oldest one that uses FileNameExtensionFilter, and
+that filter is the only one that permits JInternalFrame "minimize" buttons.
+
+
+7 August 2015  A178
+
+Adopted a simpler File::Open directory policy:
+If B4OPTIONS.TXT is absent, start in B4 local folder.
+Otherwise, start in most recent folder.
+Do a thorough verification that folder paths are not null,
+and that the file exists and is readable with length >0,
+**before calling the EJIF constructor**
+
+  Null will default to user's root, unwise;
+  Null happens when a user says "no thanks" to File::Open and gets a skeleton.
+(Maybe eliminate the skeleton! too!)
+Strange: in EJIF, I commented out all the "load skeleton" stuff, and
+now on "no thanks" I get a totally empty editor with no skeleton.
+WORSE now I get a "negativeArraySizeException" at REJIF line 404:
+evidently that empty window was submitted to the REJIF parser!
+
+---yikes---
+
+How did REJIF get loaded with blanks, for a "no thanks" response?
+Somehow, involving a Timer trigger (which drives the parser) ...
+
+EJIF line 232 is using sDir = /Users/Lampton/Desktop/Java/A178
+Exception in thread "Timer-2" java.lang.NegativeArraySizeException
+	at com.stellarsoftware.beam.REJIF.iParseAdjustables(REJIF.java:404)
+	at com.stellarsoftware.beam.REJIF.parse(REJIF.java:244)
+	at com.stellarsoftware.beam.DMF.vMasterParse(DMF.java:1320)
+	at com.stellarsoftware.beam.BJIF$BlinkTask.run(BJIF.java:144)
+	at java.util.TimerThread.mainLoop(Timer.java:555)
+	at java.util.TimerThread.run(Timer.java:505)
+
+....which shows that REJIF was created, EMPTY, on a "no thanks" !  Why? Where?
+... and worse, the "Most recent folder" readout in Options:StartingFiles" is blank.
+HOW CAN THAT BE BLANK upon receiving a "no thanks" ?  Should NOT have overwritten
+the most recent path.
+
+Reason is: EJIF gets created then installs its file.
+Perform file validation prior to calling EJIF.
+
+EJIF should never have to handle a "toOpen" chooser situation, which could "no thanks."
+ToOpen should happen within DMF prior to constructing EJIF.
+To generate a skeleton, DMF should deliver a path and file and name, then create OEJIF.
+
+To do:
+Simplify the number of places in DMF and EJIF that file paths are captured.
+Should all be in the EJIF constructor, never in DMF (six places there).
+Can all these path saves be moved into EJIF line 330 "bLoadFile(File f)"??
+
+
+
+6 August 2015  A177
+
+Rod Andrew asks, can File::Open be made to track recent directory use,
+rather than always opening in local B4 app directory?
+
+Yes it can: 177 Options::Startup File Options has a new checkbox
+"Begin File:Open directory with B4 app"  [v]
+"or our most recent diretory" [........]
+
+
+4 August 2015  A176:
+After developing three SSCCEs I find that the "Iconify" crash is due to the 
+presence of LimitingDesktopMgr() in DMF's JDesktopPane. 
+
+The purpose of the LimitingDesktopManager is to avoid windows slipping
+up under the MenuBar where their buttons and grab bars are inaccessible.
+Deleting it will re-establish this evil behavior.
+
+31 July 2015 yikes, the yellow button "Iconify" crashes any subwindow
+with Mac OS Look & Feel.  Metal OK; Numbus OK; CDE-Motif is OK.
+Iconifying the Main window works OK: puts job into the taskbar as it should.
+So the problem is limited to JInternalFrames under Mac OS Look&Feel.
+Same problem going back to at least A113.
+Same problem in A173 compiled with Java 1.5.0.
+Same problem in graphics as well as editors.
+Shows problem in NOT in GJIF nor EJIF: must be in BJIF or Look and Feel.
+
+See /Java/Menu/TinyLookAndFeel.java for an example of a Java desktop
+with JInternalFrames and a selectable LookAndFeel, that works OK.
+Notice its use of "final" to secure certain key strings.  Maybe they
+are the key to avoiding L&F crashes?
+
+Or, maybe it has something to do with how/where/when a JIF gets added to the DMF?
+TinyLookAndFeel creates a desktop "jdp", add JIFs, then add jdp to ContentPane.
+  This works. 
+SSCCE, in DMF, creates a "jdp," then setContentPane(jdp), then add JIFs to jdp.
+  This works too. 
+In B4 A176, setContentPane(jdp) is line 200; jdp.add(oejif) happens at 
+line 280, 291, 302, 587, 600, 613, 773, 788, 802, 1140.
+  This crashes on "Iconify."
+
+The crash stacktrace starts with 
+
+  "exception in thread "AWT-EventQueue-0" java.nullpointerexception..."
+
+and the discussion at StackOverflfow.com says a common cause of this
+unexpected null pointer is shadowing a global uninitialized object by a local
+initialized object with the same name: when the local one goes out of scope,
+suddenly the global null item is exposed.
+
+From the Oracle website:
+https://docs.oracle.com/javase/tutorial/uiswing/lookandfeel/plaf.html
+
+"Note: If you are going to set the L&F, you should do it as the very first step 
+in your application. Otherwise you run the risk of initializing the Java L&F 
+regardless of what L&F you've requested. This can happen inadvertently when a 
+static field references a Swing class, which causes the L&F to be loaded. 
+If no L&F has yet been specified, the default L&F for the JRE is loaded. 
+For Sun's JRE the default is the Java L&F, for Apple's JRE the Apple L&F, etc." 
+
+HOWEVER! the Oracle website then goes on to describe LookAndFeelDemo.java
+explaining how to change L&Fs after a GUI is created.
+
+A way forward would build an L&F chooser into my InternalFrameDemo, and
+see if the internal frames are crashy in the Mac OS L&F mode.
+
+StackOverflow  http://stackoverflow.com/questions/10138741/nullpointerexception
+suggests trying panel.setDoubleBuffered(false) on each JPanel. 
+I put these into EPanel and GPanel; no joy. 
+
+Note that BJIF line 185 apparently allows EJIF to override ContentPane with its ePanel.
+Might this lead to a multitude of troubles? EJIF calls this at line 164. 
+Commented it out: still crashes on Iconify.
+
+=======Bug Parade=========
+http://issues.jalview.org/browse/JAL-1625
+  "Swing NullPointerException in getVolatileOffscreenBuffer"
+  Status: in Progress
+  Resolution: Unresolved
+  Fix versions:  None
+
+Matlab Newsgroups: maybe "Universal Access in System Preferences panel?
+ Nope, I turned off the only option "Smooth images"; no joy.
+
+Perhaps a fresh Java download will help?
+trying  https://www.java.com/en/download/mac_download.jsp
+delivers jre-8u51-macosx-x64.dmg (57MB)
+now: Java Runtime Environment 1.8.0_20-b26
+
+==========Really the problem is in B4=================
+since both TinyLookAndFeel.java and SSCCE.java work OK.
+
+27 July 2015  A176:  Ten Most Recent Files
+  ..adding string arrays to DMF.java via method addRecent()
+  ..saving Recent.txt upon any change, or master exit
+  ..installed "Recent" menus with up to 10 MenuItems apiece.
+  ..works.   
+
+21 July 2015   A176:  Lost Special-key Events?
+
+This week running B4 175 on MacOS with E22-Astig, I found that one special key
+combination drives the screen into a whole new territory:
+the Ctrl-Left combo (narrow data field) drives the screen leftward
+to show Weather, Clock, calendar, and calculator!  It is like a three
+finger left swipe.
+
+Similarly broken Ctrl-Right (B4 = widen field): right swipe.
+Not broken: Alt-Right (split field), Ctrl-Alt-Down, Alt-Down, Ctrl-Z.
+
+Worse, the event never reached the B4 editor: data field did not narrow.
+
+Always worked before.  It is as if the OS has top priority on this keystroke
+object and consumes it.
+
+Web discussion of Mac KeyBindings and tools to modify them:  
+   DoubleCommand on Sourceforge;  
+   Karabiner (was KeyRemap4MacBook)
+
+To stop Ctrl-right/left from changing desktops in Lion:
+"Go to System Preferences > Keyboard > Shortcuts > Mission Control and change 
+the settings for "Move left a space" and "Move right a space" or disable them completely."
+
+so I unchecked "Move Left a Space" and "Move Right a Space"
+  Ha, no longer changes desktops.  Now it moves among desktop icons. 
+  AND BEAM FOUR'S CTRL-LEFT CTRL-RIGHT FUNCTIONS ARE RESTORED. 
+
+
+
+
+10 June 2015  A176: Nimbus look-and-feel?
+
+https://docs.oracle.com/javase/tutorial/uiswing/lookandfeel/nimbus.html
+https://docs.oracle.com/javase/tutorial/uiswing/lookandfeel/_nimbusDefaults.html#primary
+
+Vector based, cross platform, in Java 6 update 10  (1.6.0_10) and up.
+Maybe this will help Rod Andrew?
+Colors are ghastly: desktop is WAAAY too dark.
+Worse, the top window bars are transparent and look like the desktop
+when over the desktop, and look like windows behind when over a window.  
+
+Aha: other users also have trouble with window decorations in Nimbus:
+http://stackoverflow.com/questions/7612592/jframe-and-nimbus-look-and-feel
+also  http://stackoverflow.com/questions/2451990/setopaquetrue-false-java
+
+"This problem was exposed in a significant way with the Java 6's new 
+Nimbus Look & Feel. There are numerous bug reports regarding transparent 
+components filed against Nimbus (see stack overflow question Java Nimbus 
+LAF with transparent text fields). The response of the Nimbus development 
+team is this :
+
+    "This is a problem [in] the orginal design of Swing and how it has been 
+    confusing for years. The issue is setOpaque(false) has had a side effect 
+    in [existing] LAFs which is that of hiding the background which is not 
+    really what it is [meant] for. It is [meant] to say that the component 
+    may have transparent parts and [Swing] should paint the parent component 
+    behind it."
+
+
+
+
+10 May 2015  A175: eliminating mnemonics, reducing accelerators
+Rod Andrew continues to report intermittent failure of his editor
+accelerators on recent versions, compiled under 1.8.0 and 1.5.0.
+Seeing if simplifying the shortcuts has any improvement.  Also
+created a test article /Java/Menu/MenuAccel.jar with just three
+accelerators.
+
+
+16 April 2015  A174: occasional failure to converge AutoRay
+In applying E22-400-flaky.RAY to study E22-fwd-ChiefRay, a few of the
+rays trace OK but do not converge to zero.  As if the iterative process
+gets limited, or stopped, before achieving its 1E-12 error. 
+Ray numbers around 550, 650, 740 show this trouble.
+
+Aha: Problem disappears if I remove the Diams; converges OK.
+With Diams replaced, these rays fail to reach focal plane.
+Issue is: what to do with rays that are initially OK but poorly aimed,
+yet which cannot be properly aimed without killing them?
+
+Possible AutoRay warning: "Not all rays survived AutoRay adjustment."
+Better for AutoRay: RMS, Nrays, Ngoals, Nterms, Nstarts, Nfailed, Nadjusted.
+This should replace the default InOut adjustment dialog. 
+(This InOut lists: RMS 1D average = xxx, Nrays, Ngoals, Nterms.)
+
+Details of the issue: AutoRay counts ngoodrays as good starts,
+not as good finishes.  Need both!
+Problem is NOT detected in bBuildJacobian() BIGVAL lines 214, 226, 243:
+Problem IS detected in dPerformResid() line 177.
+
+
+
+
+15 April 2015  A174:
+Installed three new outputs:  i,j,k give are the surface perp {x,y,z} in local frame.
+Mods are in place, in REJIF and InOut.  
+
+1 April 2015  A173: cleaned up GPanel, eliminating obsolete quadList tools.
+Privatized all quadlists: baseList, batchList, randList, finishList, annoList.  
+Made the four new tools below responsive to the respective code numbers 
+QBASE=0, QBATCH=1, QRAND=2, QFINISH=3, QANNO=4:
+
+   clearList(which)
+   addRaw(x,y,z,op, which)
+   addScaled(x,y,z,op, which)
+   addScaled(xyz, op, which)
+
+viewelaz() rotation tool remains within each client.
+
+DemoPanel: migrated.  Works.
+Histo1D:   migrated.  Works.
+MapPanel:  migrated.  Works.
+Histo2D:   migrated.  Works.
+Plot2D:    migrated.  Works.
+Plot3D:    migrated.  Works.
+MTF:       migrated.  PostScript failed. Repaired.   
+MPlot:     migrated.  Works; used E2-fwd-Multi.OPT
+Layout:    migrated.  Works. 
+
+The absent finishing of Layout was repaired by inserting calls to
+renderList(finishList, x,x,x) into drawPage() and into redo(). 
+Since doFinish() is no longer needed, it has been removed from
+GPanel and its clients. 
+
+
+27-30 March 2015  A172 implementing new quadlist for finishing Layout artwork.
+
+There will now be five quad lists in GPanel:
+  baseList    << always draw this base art including table rays.
+  randList    << external random ray art built up from batchList. 
+  finishList  << used only by Layout to finish its artwork after randoms.
+  annoList    << contains annotation artwork. 
+  batchList   << never drawn, transient stash for each random batch.
+If these are protected, not private, then the client can add quads to any of them.
+BETTER: KEEP THEM PRIVATE BUT OFFER PROTECTED METHODS TO CLEAR AND BUILD.
+
+Plan: temporarily retain GPanel() drawing methods, but migrate each client out
+of the implicit artwork GPanel methods into its own explicit xxxxList.add() method.
+Try to everywhere use a small set of identical generalized quadList methods.
+If succcessful, these can be retracted back into GPanel to serve all clients.
+I am thinking of trying these four that let the lists be private....
+     addRaw(x,y,z,op,qList)    << not scaled  
+     add2D(x,y, op, qList)     << scaled but not rotated by viewelaz().
+     add3D(xyz, op, qList)     << scaled and rotated by viewelaz().
+     clearList(qList)          << empties qList
+Also, viewelaz() could be retracted back into GPanel as well.
+
+Histo1D is the simplest: 2D, random rays are internal.  Uses only baseList.
+  doArt() initializes its baseList, then uses add2Dbase() for everything.
+  It uses a unit box for its artwork. It never calls addAffines().  
+  Mouse zoom and drag work OK. 
+  Move the addScaledItem() into Histo1D and name it addScaledItemBase().
+  Its required functions getax() and getay() dwell in GPanel, for mouse work.
+  Works, screen and CAD.
+  But maybe it would have extra room if it pre-called addAffines() ???
+
+
+MapPanel is also simple: 2D, no randoms.  Uses only baseList. 
+  Adopting private add2Dbase() to replace previous call into GPanel(). 
+  Works, screen and CAD.
+
+
+DemoPanel is almost as simple: 3D, twirl, zoom. No randoms.  Uses only baseList.
+  Uses a unit box for its artwork.
+  Oddly it calls addAffines() as part of setup, but seems to work without that call.
+        uxcenter = 0.0;       // needed for GPanel's addAffines(): = default?
+        uxspan = EXTRAROOM;   // needed for GPanel's addAffines(): = default?
+        uycenter = 0.0;       // needed for GPanel's addAffines(): = default?
+        uyspan = EXTRAROOM;   // needed for GPanel's addAffines(): = default?
+  Now doArt() calls private add3Dview(x,y,z, opcode). 
+  Its private viewelaz() might be identical to other clients.
+  Works, screen and CAD.
+
+Histo2D is similar: 3D; twirl, zoom etc.  Uses only baseList.
+  It uses a unit box for its artwork. It never calls addAffines().
+  Its doArt() initializes baseList, then uses private add3Dbase(xyz, op).
+  This is merely addScaledItem() preceded by a viewelaz() rotation.
+  Private methods addStringCenter() & addStringRight() are based on add2Dbase(). 
+  Private cube-facet methods: addFace() & addLid() are based on add2Dbase().
+  Gets its scaling zoom and 3D rotations from host GPanel.
+  Works, screen and CAD. 
+  Maybe better with extra room:  addAffines?
+
+
+Plot2D is 2D but must deal with external random rays. Uses baseList and batchList. 
+  Not a unit box: instead uses user units. 
+  Still, the uxspan display coefficients are already in place and tested.
+  Adopted explicit local add2Dbase().
+  Works, screen and CAD, sending all randoms into baseList. 
+  But... if I send random rays to randList, they fail to appear on display.
+  They DO appear in CAD: na=85, nb=112, nc=0, nd=0.
+  REVERTING to 16 March edition of Plot2D; random is OK, nrand=38, nbatch=3; 
+  and CAD works OK with na=86, nb=41, nc=0, nd=0.
+  Perhaps its random rays ought to feed into batchList? processed elsewhere?
+  Replacing all the addScaledItem()s with addScaledItemBase() works OK
+  But the rays use "buildScaledItem()" and this is not the same.
+  What is it?
+  In GPanel(), addScaledItem() calls getax() etc
+  In GPanel(), there are many methods named buildScaledItem().
+  The one with arguments (x,y,z,op) calls getax(), getay(), getaz().
+  The one with arguments (x,y,op) passes (x,y,0,op) to the 3 arg implementation.
+  What is different about these is they have a flag "bRand":
+  bRand = true  ==> batchList, else baseList. 
+  Ah, my error was putting random rays into randList. Use batchList.
+  Works, screen and CAD.
+
+
+Plot3D is 3D, adopting add3Dbase, but otherwise is like Plot2D. 
+  It handles table rays and random rays using a switched quad writer:
+    private void add3Deither(double xyz[], int op, boolean bRand)
+    {
+        if (bRand)
+          add3Dbatch(xyz, op);
+        else
+          add3Dbase(xyz, op); 
+    }
+  Works, screen and CAD.
+
+
+MPlotPanel ...
+
+
+MTFPanel ...
+
+
+Layout is 3D and needs the whole enchilada. I adopted a three-way quadwriter:
+    
+    int BASE = 0;    // macro for add2D()
+    int BATCH = 1;   // macro for add2D()
+    int FINISH = 2;  // macro for add2D()
+
+    private void add3D(double xyz[], int op, int which)
+    {
+        switch (which)
+        {
+            case 0:  baseList.add(new XYZO(getax(xyz[0]), ... )); break; 
+            case 1:  batchList.add(new XYZO(getax(xyz[0]), ... )); break; 
+            case 2:  finishList.add(new XYZO(getax(xyz[0]), ...)); break; 
+            default: baseList.add(new XYZO(getax(xyz[0]), ...));  break; 
+        }
+    }
+Each of Layout's many artwork elements does its own viewelaz, then calls this add2D() routine. 
+
+This Layout has several failures. 
+   * Rulers, tickmarks, etc are collapsed to a point at the center. 
+   * Final shading over rays is absent, although shading over arcs is present and correct.
+   * CAD output is fragmented and rays are drawn with widths of 132 points,
+      not the 0.5 points. Screen table rays are fat (5 points?) if viewed from behind. 
+      (The dashed axes are drawn perfectly: they are in 3D of course.)
+
+A169 for rulers? skips viewelaz(); calls addScaledItem(ticks[i], y, PATHTO);
+A169 for axes?  calls viewelaz(xyz) then buildScaledItem(xyz, ..)
+  (note: buildScaledItem() is just like addScaledItem() but has an output switch.)
+So: addScaledItem() uses the same display scale but is not rotated. 
+
+A172: add2D() is intended to replace both of these locally.
+Perhaps I have failed to setScaleFactors()? saveCurrentAffines()? Nope they look OK.
+Perhaps I need some diagnostics on the ruler construction?  
+HA my ruler code at line 2014 is not calling scaled item! but is using the raw tick user values
+as if they were points.  Adopted add2D() for 2D artwork like rulers; includes scaling.
+^^ Fixes the rulers. 
+ 
+Wrong line widths on rays: surface linewidths OK; axis linewidths OK.
+The error must lie within drawOneRay(), line1170.  Ha, needs addRaw() quadList option.
+^^ Fixes the ray artwork linewidths.
+
+Failure to overlay the finish art on screen:
+  Table rays are properly overlaid in Postscript.
+  Random rays are properly overlaid in Postscript.
+  It is the darn screen.  
+
+
+
+23 - 26 March 2015  A171  Working problems 1 and 2 below from 169_GitHub release.
+
+====The myTechList issue: likely culprit lies within GPanel, which owns myTechList====
+GPanel line 244 doFinish() myTechList.clear() causes the problem with Histo1D.
+    ^^ Commenting line 244 out fixes Histo1D.   Yay.
+GPanel line 373 drawPage() myTechList.clear() preparing for doTechList call;
+    ^^ This one is probably OK since doTechList should rebuild myTechList.
+GPanel line 564 protected clearXYZO();  for clients; no local calls to this method. 
+    ^^ clients are DemoPanel, H1Dpanel, H2Dpanel, LayoutPanel (3 places!), 
+       MPlotPanel, MTFpanel, MapPanel, Plot2Panel, Plot3Panel. 
+GPanel line 1239 localclip(); doubtful.
+
+OK, so with line 244 commented out, and Histo1D working, how about Layout?
+Layout without randoms: OK on screen, OK in Postscript.
+Layout with randoms: 
+   On screen: transient batches show but finish-art removes the randoms.
+   In Postscript: randoms are all showing but finish-art is absent. 
+
+Plot2D: somewhat like Layout
+  on Screen transient batches show but completion removes those randoms.
+  in Postscript the randoms are present as they should be. 
+
+Annotations are working nicely.
+
+26 March 2015 status:
+
+                        A171       A171          A171            compare A169
+GPanel line 245 "clear" present;  comment out; doFinish=repaint   shipping
+================================================================================
+H1D screen plain           OK        OK              OK              OK
+H1D screen random          OK        OK              OK              OK
+H1D PS plain               OK        OK              OK              OK
+H1D PS random           no file.     OK              OK            no file.
+
+Plot2D screen              OK        OK              OK              OK
+Plot2D random              OK     transient          OK              OK
+Plot2D PS plain            OK        OK              OK              OK
+Plot2D PS random         no file.    OK              OK            no file.
+
+Layout screen              OK        OK              OK              OK
+Layout random              OK     transient      unfinished          OK
+Layout PS plain            OK        OK              OK              OK
+Layout PS random       fragment    fragment      unfinished       fragment
+
+From these data there is some problem with the transfer of quadlists to CAD,
+once random has been run. Notice that Map has no trouble with its CAD output.
+
+Close examination of Layout: the table rays are properly overshaded, but the
+random rays are drawn later and are not overshaded. SCREEN and POSTSCRIPT.
+I think this indicates a simple failure to place the finish shading after the
+random rays.  It appears to be applied before the random rays. 
+
+Indeed, CAD::doCad() writes its buffers in the order called:
+        initPS(pw, bPortrait, bbkg);
+        writePSList(a, pw);   << surfaces and table rays and finish;
+        writePSList(b, pw);   << random ray quadlist
+        writePSList(c, pw);   << annotation quadlist
+        pw.println(" showpage"); 
+
+What is needed is some kind of fourth quadlist: myFinishList, 
+supplied as a list that can be drawn following the random rays. 
+This is for Layout only; other artwork clients provide nothing.
+
+This is sufficiently different I will bump the rev to 172. 
+
+============
+
+
+"Transient" explanation: maybe doFinish() line 247 calling renderList()?
+having no new randoms to show, and no call to get myRandList rendered?
+Plot2d: GPanel::redo() is showing nbatch = 10, and nrand = 10, 20, ... growing.
+Layout: GPanel::redo() is showing nbatch = 70, and nrand = 70, 140, .. growing.
+
+Could GPanel::doFinish() be the culprit?  Replacing it with a simple repaint()
+goes a long way towards solving the problems.  Remaining issue is how to get
+LayoutPanel to conclude its artwork after everything else is drawn?
+
+Cannot go atop myTechList since that is drawn at the bottom.
+Could go atop myRandList.
+Probably should avoid going atop myAnnoList.
+
+It is useful that GPanel's doFinish() calls client doFinishArt() because
+for instance that is how Map knows that it is time to write its output file.
+
+LayoutPanel's doFinishArt() uses addXYZO() to draw foreground artwork.
+  However, GPanel's host addXYZO() method appends to myTechList.
+  Seems we need an addRand() method to append to myRandList: gulp.
+LayoutPanel's doFinishArt() also calls putRadialArc() for drawing.
+  However this local method uses addScaledItem() which in turn calls addXYZO().
+  So this is getting driven towards always writing into myTechList. 
+Perhaps the easiest fix is to use a pointer into myTechList:
+Within each client:
+  1a. write entire base artwork.
+  1b. Save a pointer to top of base.
+  1c. if doFinishArt() is called, start at pointer, not at zero. 
+Within GPanel:
+  2. Draw all rays to myRandList. 
+  3. Have GPanel's doFinish() redraw myTechList starting at pointer
+  4. draw Annotation.
+
+But: exactly how does a client write rays?
+    Its doArt() look draws table rays with kray=1,...nrays; 
+    Or receives a generic call from Random to doRandomRay() so kray=0;
+    In local drawOneRay(kray, bRandom) does the work:
+      Runs the ray using RT13 appropriate trace method;
+      Draws it using buildXYZO(bRandom) and buildScaleItem(bRandom) calls.
+      In GPanel, these write to myBatchList if random, else to myTechList.
+A client thus builds table rays into myTechList, and random rays into myBatchList.
+
+Later, in GPanel::redo(), the bactch list gets added to myRandList and rendered.
+
+
+
+
+
+23 March 2015, A169 downloaded from GitHub 16 March 2015: studying its two failures:
+
+1. Histo1D (and Plot2D, etc) works great on screen including random rays, and 
+Postscript is OK if there are no random rays, but its Postscript output crashes 
+with a zero byte output file and a crash report as follows...
+
+Exception in thread "AWT-EventQueue-0" java.lang.IndexOutOfBoundsException: Index: 0, Size: 0
+	at java.util.ArrayList.rangeCheck(ArrayList.java:653)
+	at java.util.ArrayList.get(ArrayList.java:429)
+	at com.stellarsoftware.beam.CAD.listPS(CAD.java:112)
+
+This is known to be an improper zeroing of the length of myTechList
+caused by the random rays.  If I drag the artwork, CAD crash vanishes.
+As if the random rays leave myTechList OK for screen rendering but
+zeroed out when it gets to CAD.doCAD() which expects a nonzero list size.
+
+2.  Layout without randoms works great on screen and into PostScript.
+With random rays it is good on screen, and can deliver Postscript, but that
+Postscript file is crippled: turned 90deg; no base art, shows all rays
+but no finish art to shade those rays, as if major hunks are jumbled.
+
+I will skip over rev 170-failed and commence analysis as A171. 
+
 
 16 March 2015: A169, two improvements:
 
