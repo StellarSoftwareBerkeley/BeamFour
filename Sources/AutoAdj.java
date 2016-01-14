@@ -8,7 +8,7 @@ import javax.swing.*;
 /** AutoAdj.java
   *
   * class LMadj is at the bottom of this file. 
-  * 
+  * A190, Nov 2015: introducing weights.
   * @author: M.Lampton (c) 2003..2006 STELLAR SOFTWARE all rights reserved.
   */
 class AutoAdj
@@ -34,15 +34,15 @@ class AdjHost implements B4constants
     private JButton jbDone; 
     private JDialog jd = null; 
     private int hostiter=0;
-    private int maxiter=100;          // see UO_AUTO_MAXIT below
-    private double tol = 1E-12;       // see UO_AUTO_TOL below
-    private double dUserStep = 1E-6;  // see UO_AUTO_STEP below
+    private int maxiter=100;               // see UO_AUTO_MAXIT below
+    private double tol = 1E-12;            // see UO_AUTO_TOL below
+    private double dUserStep = 1E-6;       // see UO_AUTO_STEP below
     private boolean bComplete = false; 
     private double dDelta[] = new double[MAXADJ]; 
     private int istatus; 
-    private double sos, rms;          // from Comparo.resid[]
-    private double jac[][];           // [npts][nadj]; dense
-
+    private double sos, rms;               // from Comparo.resid[]
+    private double jac[][];                // [npts][nadj]; dense
+    private double wx, wy, wz, wu, wv, ww; // weights for each goal
 
 
 
@@ -92,6 +92,13 @@ class AdjHost implements B4constants
         maxiter = Math.max(1, Math.min(maxiter, 1000)); 
         tol = U.suckDouble(DMF.reg.getuo(UO_AUTO, 2)); 
         tol = Math.max(1E-20, Math.min(tol, 1.0)); 
+        
+        wx = U.suckDouble(DMF.reg.getuo(UO_AUTO, 3)); 
+        wy = U.suckDouble(DMF.reg.getuo(UO_AUTO, 4)); 
+        wz = U.suckDouble(DMF.reg.getuo(UO_AUTO, 5)); 
+        wu = U.suckDouble(DMF.reg.getuo(UO_AUTO, 6)); 
+        wv = U.suckDouble(DMF.reg.getuo(UO_AUTO, 7)); 
+        ww = U.suckDouble(DMF.reg.getuo(UO_AUTO, 8)); 
 
         //------count the initially good rays----------
 

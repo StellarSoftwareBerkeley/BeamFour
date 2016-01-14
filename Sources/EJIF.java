@@ -273,20 +273,16 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
     {
         if (f ==null)
         {
-            // System.out.println("EJIF bLoadFile() exiting; null file."); 
             return false;
         }
         if (!f.exists())
         {
-            // System.out.println("EJIF bLoadFile() exiting; nonexistent file. "+f.toString()); 
             return false;
         }
         if (!f.canRead())
         {
-            // System.out.println("EJIF bLoadFile() exiting; unreadable file. "+f.toString()); 
             return false;
         }
-        // System.out.println("EJIF bLoadFile() starting: file = "+f.toString());
         
         try 
         {
@@ -409,13 +405,11 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
 
         // we have a definite selection...
         DMF.sCurrentDir = myFile.getParent(); 
-        // System.out.println("EJIF pleaseSaveAs() setting sCurrentDir = "+DMF.sCurrentDir); 
         
         // If no name or extension, supply one...
         String fp = myFile.getPath(); 
         if (fp.length() < 1)           // no name
         {
-            // System.out.println("EJIF pleaseSaveAs() has no file name.  Assigning 'noname'."); 
             fp = "noname"; 
         }
 
@@ -439,22 +433,18 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
             bDirty = false; 
             myFpath = myFile.getPath();          
             String ext = U.getExtensionToLower(myFpath); 
-            // System.out.println("EJIF pleaseSaveAs() saved extension = "+ext); 
             
             //---update the recent file list----
             if (ext.equals("opt"))
             {
-                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath); 
                 DMF.addRecent(0, myFpath);
             }
             if (ext.equals("ray"))
             {
-                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath);
                 DMF.addRecent(1, myFpath); 
             }
             if (ext.equals("med"))
             {
-                // System.out.println("EJIF pleaseSaveAs() adding recent file = "+myFpath); 
                 DMF.addRecent(2, myFpath); 
             }
             
@@ -471,7 +461,6 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
           return; 
         if (myFile == null)
         {
-            // System.out.println("EJIF pleaseSave() has myFile = null; calling pleaseSaveAs()."); 
             pleaseSaveAs(); 
         }
         if (ePanel.save(myFile))

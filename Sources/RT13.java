@@ -4,6 +4,9 @@ import java.text.DecimalFormat; // for debugging only
 
 /** This file contains public class RT13 and private class MinFit
   *
+  *
+  *  A188, 189: adopted class Triple for refraction, diffraction
+  *  A186 Sep 2015: eliminated final refraction into vacuum in getRefraction()
   *  A169 March 2015: Added RTANGLE each intercept ray dot normal, in iRedirect.
   *
   * Schematic ray loop, without bailouts:
@@ -20,7 +23,6 @@ import java.text.DecimalFormat; // for debugging only
   *
   *    PHANTOM HYPERBOLOIDS DO NOT EXIST  "mis"
   *    FARSIDE ELLIPSOIDS DO NOT EXIST    "mis"
-  *
   *
   * A166 Jan 2015: reworked redirectors CBin, CBout: now copies local to local.
   * A154: installed Bimodal lens, new logic; TIR failures...
@@ -595,8 +597,11 @@ class RT13 implements B4constants
     {
         // First: try to get refr from surfs[][] set by OEJIF.
         // If OK, use it; else use media LUT. 
+        int nsurfs = DMF.giFlags[ONSURFS]; 
         if (jsurf<1)
           return 1.0;        // error condition
+        if (jsurf > nsurfs)
+          jsurf = nsurfs;   // eliminate final refraction to vacuum; A186
         double refr = surfs[jsurf][OREFRACT]; 
         if (Double.isNaN(refr))
         {
@@ -1756,14 +1761,14 @@ class RT13 implements B4constants
     // Receives status from preceding Diam() check. 
     // Returns RROK, RRUNK, RRORD, RRTIR. 
     {
-        vSetAngle(rayseq[g], surf);  // fills in RTANGLE field
+        vSetAngle(rayseq[g], surf);  // sets incoming RTANGLE fields before modifying ray direction
         boolean bGroovy = surf[OGROOVY] != 0.0; 
         int surftype = (int) surf[OTYPE]; 
         switch(surftype)
         {
              case OTBLFRONT:      // successful refraction at bimodal lens
              case OTBLBACK:
-                   return iSnell(rayseq[g], surf, j); 
+                    return iTG(rayseq[g], surf, j); 
              case OTDISTORT:
                     return RROK; 
              case OTIRIS: 
@@ -1773,24 +1778,20 @@ class RT13 implements B4constants
                     return iRetro(rayseq[g], surf); 
              case OTMIRROR:
              case OTMIRRARRAY:
-                   if (bGroovy) 
-                     return iRgrating(rayseq[g], surf);
-                   else
-                     return iMirror(rayseq[g], surf); 
+                    if (bGroovy) 
+                      return iRgrating(rayseq[g], surf);
+                    else
+                      return iMirror(rayseq[g], surf); 
              case OTLENS:
              case OTLENSARRAY:
-                   if (bGroovy) 
-                     return iTgrating(rayseq[g], surf, j);
-                   else
-                     return iSnell(rayseq[g], surf, j);  
+                    return iTG(rayseq[g], surf, j); 
              case OTSCATTER:
-                   return iScatter(rayseq[g], surf); 
+                    return iScatter(rayseq[g], surf); 
              case OTCBIN:  // CoordBreak input surface
-                   return iCBIN(rayseq, surf, g);  // copy previous local uvw
+                    return iCBIN(rayseq, surf, g);  // copy previous local uvw
              case OTCBOUT: // CoordBreak output surface 
-                   return iCBOUT(rayseq, surf, g); // copy previous local xyzuvw
+                    return iCBOUT(rayseq, surf, g); // copy previous local xyzuvw
         }
-
         return RRNON; 
     }
     
@@ -1799,14 +1800,7 @@ class RT13 implements B4constants
     static private int iCBIN(double rayseq[][], double surf[], int g)
     // CoordBreak CBin input surface method
     // Must do nothing: CBout will grab local coords here.
-    // THIS WORKS ONLY IF j>1
     {
-        // if (g>1)
-        // {
-        //     rayseq[g][RTUL] = rayseq[g-1][RTUL]; 
-        //     rayseq[g][RTVL] = rayseq[g-1][RTVL]; 
-        //     rayseq[g][RTWL] = rayseq[g-1][RTWL]; 
-        // }
         return RROK; 
     }
     
@@ -1832,12 +1826,12 @@ class RT13 implements B4constants
     // method: r = i - 2 (i dot n) n
     // note this is quadratic in n, hence independent of sign(n)
     {
-        double[] norm = new double[RNATTRIBS];
-        vGetPerp(ray, surf, norm); 
-        double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
-        ray[RTUL] -= 2.0 * dotin * norm[RTUL];
-        ray[RTVL] -= 2.0 * dotin * norm[RTVL];
-        ray[RTWL] -= 2.0 * dotin * norm[RTWL];
+        double[] Norm = new double[RNATTRIBS];
+        vGetPerp(ray, surf, Norm); 
+        double dotin = ray[RTUL]*Norm[RTUL] + ray[RTVL]*Norm[RTVL] + ray[RTWL]*Norm[RTWL];
+        ray[RTUL] -= 2.0 * dotin * Norm[RTUL];
+        ray[RTVL] -= 2.0 * dotin * Norm[RTVL];
+        ray[RTWL] -= 2.0 * dotin * Norm[RTWL];
         // normalize(ray);   // should be unnecessary!
         return RROK;
     }
@@ -1846,15 +1840,21 @@ class RT13 implements B4constants
     static private void vSetAngle(double ray[], double surf[])
     // M.Lampton STELLAR SOFTWARE (C) 2015
     // uses iMirror() tools to get any intercept ray dot normal.
-    // called by iRedirect for good rays, fills in ray[RTANGLE] and normal vector. 
+    // called by iRedirect for good rays, fills in ray[RTANGLE] and normal {i,j,k}.
+    // Oct 2015: now using Triple::getAngle() full accuracy. 
     {
-        double[] norm = new double[RNATTRIBS];
-        vGetPerp(ray, surf, norm); 
-        double dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
-        ray[RTANGLE] = U.arccosd(Math.abs(dotin)); 
-        ray[RTNORMX] = norm[RTUL]; 
-        ray[RTNORMY] = norm[RTVL]; 
-        ray[RTNORMZ] = norm[RTWL]; 
+        double[] nor = new double[RNATTRIBS];
+        vGetPerp(ray, surf, nor); 
+        Triple R = new Triple(ray[RTUL], ray[RTVL], ray[RTWL]); 
+        Triple N = new Triple(nor[RTUL], nor[RTVL], nor[RTWL]); 
+        double degrees = Math.toDegrees(Triple.getAngle(R, N));
+        if (degrees > 90.0)            // if farside
+          degrees = 180.0 - degrees;   // use nearside
+        // finally, fill in the angle fields of ray[]
+        ray[RTANGLE] = degrees; 
+        ray[RTNORMX] = nor[RTUL]; 
+        ray[RTNORMY] = nor[RTVL]; 
+        ray[RTNORMZ] = nor[RTWL]; 
     }
 
     
@@ -1875,7 +1875,7 @@ class RT13 implements B4constants
     // Spencer & Murty JOSA 52#6 672 1962.
     // Refractive indices can be positive or negative.
     {
-        double numer, denom, mu, ax, ay, az, bx, by, bz, beta2, beta, dotin;
+        double numer, denom, mu, ax, ay, az, bx, by, bz, b2, gamma, dotin;
 
         int kray = getGuideRay(); 
         numer = getRefraction(jsurf, kray); 
@@ -1887,32 +1887,152 @@ class RT13 implements B4constants
           denom = 1.0; 
 
         mu = numer/denom;
-        double[] norm = new double[13]; 
-        vGetPerp(ray, surf, norm); 
+        double[] Norm = new double[13]; 
+        vGetPerp(ray, surf, Norm); 
 
-        /// a is mu * (ray cross norm):
-        ax = mu * (ray[RTVL]*norm[RTWL] - ray[RTWL]*norm[RTVL]);  
-        ay = mu * (ray[RTWL]*norm[RTUL] - ray[RTUL]*norm[RTWL]); 
-        az = mu * (ray[RTUL]*norm[RTVL] - ray[RTVL]*norm[RTUL]); 
+        /// A is mu * (ray cross norm), perpendicular to {S,N} plane
+        ax = mu * (ray[RTVL]*Norm[RTWL] - ray[RTWL]*Norm[RTVL]);  
+        ay = mu * (ray[RTWL]*Norm[RTUL] - ray[RTUL]*Norm[RTWL]); 
+        az = mu * (ray[RTUL]*Norm[RTVL] - ray[RTVL]*Norm[RTUL]); 
 
-        // b is mu*ray projected along surface:
-        bx = norm[RTVL]*az - norm[RTWL]*ay;  
-        by = norm[RTWL]*ax - norm[RTUL]*az; 
-        bz = norm[RTUL]*ay - norm[RTVL]*ax;
+        // B is (N cross A) = mu*ray projected along surface, in {S,N} plane
+        bx = Norm[RTVL]*az - Norm[RTWL]*ay;  
+        by = Norm[RTWL]*ax - Norm[RTUL]*az; 
+        bz = Norm[RTUL]*ay - Norm[RTVL]*ax;
 
-        beta2 = 1.0 - bx*bx - by*by - bz*bz;
-        if (beta2 < -TOL)
+        b2 = bx*bx + by*by + bz*bz;
+        if (b2 > 1.0)
           return RRTIR;
-        if (beta2 > TOL)
-          beta = Math.sqrt(beta2);
+        if (b2  < 1.0)
+          gamma = Math.sqrt(1 - b2);
         else
-          beta = 0.0;
-        dotin = ray[RTUL]*norm[RTUL] + ray[RTVL]*norm[RTVL] + ray[RTWL]*norm[RTWL];
+          gamma = 0.0;
+        dotin = ray[RTUL]*Norm[RTUL] + ray[RTVL]*Norm[RTVL] + ray[RTWL]*Norm[RTWL];
         if (dotin < 0.0)
-          beta = -beta;
-        ray[RTUL] = bx + beta * norm[RTUL];
-        ray[RTVL] = by + beta * norm[RTVL];
-        ray[RTWL] = bz + beta * norm[RTWL];
+          gamma = -gamma;
+        ray[RTUL] = bx + gamma * Norm[RTUL];
+        ray[RTVL] = by + gamma * Norm[RTVL];
+        ray[RTWL] = bz + gamma * Norm[RTWL];
+        return RROK;
+    }
+
+
+    static private int iTG(double ray[], double surf[], int jsurf)
+    // Transmission grating solver: refraction and diffraction combined.
+    // Must have numerical wavelength not literal if using diffraction. 
+    //
+    // Could replace iSnell() !
+    //
+    // Has VPHs but excludes HOEs.
+    // M.Lampton STELLAR SOFTWARE (C) 2015  rev A186
+    // Spencer & Murty JOSA 52#6 672 (1962) eqn 49, three terms in local frame
+    // Refraction of incoming ray S...
+    //    S' = (n2/n1)*S 
+    // plus diffraction into the local P direction perp to grooves...
+    //    + (M*G*lambda/n2)*P 
+    // plus a normal part to complete the square...
+    //    + gamma*r. 
+    // Note: bGroovy triggers for any param GX....ORDER..VLS.....HOELAM being present. 
+    //
+    // Refractive indices can be positive or negative.
+    {   
+        int kray = getGuideRay(); 
+        double numer = getRefraction(jsurf, kray); 
+        double denom = getRefraction(jsurf+1, kray); 
+
+        if (Double.isNaN(numer) || (numer==0.0))
+          numer = 1.0; 
+        if (Double.isNaN(denom) || (denom==0.0))
+          denom = 1.0; 
+
+        double mu = numer/denom;
+        double[] Norm = new double[13]; 
+        vGetPerp(ray, surf, Norm); 
+
+        /// PART ONE: evaluate the refraction perp to Norm:
+        
+        Triple Ray   = new Triple(ray[RTUL],  ray[RTVL],  ray[RTWL]); 
+        Triple Unorm = new Triple(Norm[RTUL], Norm[RTVL], Norm[RTWL]); 
+        // unit length guaranteed by Z.normalize()
+          
+        Triple Total = Triple.getPerp(Ray, Unorm);       // pure refraction so far
+        Total = Triple.getProduct(Total, mu);           // modified by refractive ratio
+
+        /// PART TWO: evaluate the local plane diffraction if any:
+        
+        // Get order from raystart, or if absent, from the optic table. 
+        double order = surf[OORDER]; 
+        double rayorder = raystarts[kray][RSORDER]; 
+        if (!U.isNegZero(rayorder))
+          order = rayorder;
+        if (order != 0)                // diffractive?
+        {
+            double wavel = raystarts[kray][RSWAVEL]; 
+            if (Double.isNaN(wavel))
+              return RRUNK; 
+            double waveorder = wavel*order; 
+            
+            double gx = surf[OGX];     // density in vertex frame
+            double gy = surf[OGY];     // density in vertex frame            
+            
+            if (waveorder != 0.)                      // and wavy?
+            {
+                if (Math.abs(gx) > TOL)               // add VLS in vertex frame...            
+                  gx += ray[RTXL] * (surf[OVLS1]
+                     + ray[RTXL] * (surf[OVLS2]
+                     + ray[RTXL] * (surf[OVLS3]
+                     + ray[RTXL] * surf[OVLS4])));
+                else if (Math.abs(gy) > TOL)
+                  gy += ray[RTYL] * (surf[OVLS1]
+                     + ray[RTYL] * (surf[OVLS2]
+                     + ray[RTYL] * (surf[OVLS3]
+                     + ray[RTYL] * surf[OVLS4])));        
+                     
+                if (Math.abs(surf[OHOELAM]) > TOL)    // add HOE terms.....
+                {
+                    double d1 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX1])
+                                          + U.sqr(ray[RTYL] - surf[OHOEY1])
+                                          + U.sqr(ray[RTZL] - surf[OHOEZ1]));
+ 
+                    double d2 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX2])
+                                          + U.sqr(ray[RTYL] - surf[OHOEY2])
+                                          + U.sqr(ray[RTZL] - surf[OHOEZ2]));
+
+                    if ((d1 > TOL) && (d2 > TOL))
+                    {
+                        double a1 = 1.0 / (d1*surf[OHOELAM]);     // virtual HOE if <0
+                        double a2 = 1.0 / (d2*surf[OHOELAM]);
+                        gx += a1*(ray[RTXL]-surf[OHOEX1])-a2*(ray[RTXL]-surf[OHOEX2]);
+                        gy += a1*(ray[RTYL]-surf[OHOEY1])-a2*(ray[RTYL]-surf[OHOEY2]);
+                    }
+                }                     
+                          
+                Triple Grating = new Triple(gx, gy, 0.);           // in vertex frame
+                Triple Diffract = Triple.getPerp(Grating, Unorm);  // in vertex frame
+                double coef = waveorder/denom;                     // scaling factor
+                Grating = Triple.getProduct(Grating, coef);        // in vertex frame
+                Total = Triple.getSum(Total, Grating);             // now with diffraction if present.  
+            }
+        }
+        
+        // The gamma term to make |S|=1 is purely along the normal.
+        // The S components from refraction and diffraction are purely perp normal.
+        // So THERE IS NO NEED FOR A NUMERICAL GAMMA SOLVER, just apply total squares,
+        // to make the magnitude of S come out to equal 1.
+        //
+        ///// NOW MODIFY THE RAY DIRECTION IN FULL 3D ///
+        
+        double rlength = Total.getLength(); 
+        double r2 = rlength*rlength; 
+        if (r2 > 1.0)
+          return RRTIR;  // could also be RRORDER
+        double gamma = Math.sqrt(1 - r2); 
+        double dotin = Triple.getDot(Ray, Unorm); 
+        if (dotin < 0.0)
+          gamma = -gamma;
+        ray[RTUL] = Total.getX() + gamma * Unorm.getX();
+        ray[RTVL] = Total.getY() + gamma * Unorm.getY();
+        ray[RTWL] = Total.getZ() + gamma * Unorm.getZ();  
         return RROK;
     }
 
@@ -1932,16 +2052,7 @@ class RT13 implements B4constants
         ray[RTWL] /= sum;
         return RROK; 
     }
-
-
-    static private int iTgrating(double ray[], double surf[], int jsurf)
-    {
-        int i = iGrating(ray, surf, false); 
-        if (i != RROK)
-          return i; 
-        return iSnell(ray, surf, jsurf); 
-    }
-
+    
 
     static private int iRgrating(double ray[], double surf[])
     {
@@ -1960,12 +2071,12 @@ class RT13 implements B4constants
     //      Kye = Kyi + 2pi*order*gy
     // and wave frequency match sets....
     //     |Ke| = |Ki|*v1/v2 = |Ki|*n2/n1.
-
+    //
     // May 2013: better is to include S&M's refraction.  Unit ray directions S1, S2:
-    //      S2 x Normal = (n1/n2)* S2 x Normal + m*lambda*rho*Q
+    //      S2 x Normal = (n1/n2)* S1 x Normal + M*G*lambda**Q/n2
     // where Q is the unit vector parallel to local rulings. 
-
-
+    // Sept 2015 A186 doing this implementation
+    //
     //
     // Let P, Q, R be unit vectors: perp groove, along groove, local normal;
     // let iP, iQ, iR be incident ray direction,
@@ -1989,7 +2100,7 @@ class RT13 implements B4constants
     {
         double qx, qy, qz, qq, absRxG, px, py, pz, sp, sq, sr, sr2;
         double gx, gy, diffract, a1, a2, d1, d2;
-        double dAction = bRefl ? -1.0 : 1.0; // -1=reflect; +1=transmit
+        double dAction = bRefl ? -1.0 : 1.0; // -1=reflect; +1=transmit VACUUM ONLY
 
         // Get the ray wavelength from this raystart. 
 
@@ -2000,7 +2111,6 @@ class RT13 implements B4constants
 
         // Get the diffraction order from this raystart,
         // or if absent, from the optic table. 
-
         double order = surf[OORDER]; 
         double rayorder = raystarts[kray][RSORDER]; 
         if (!U.isNegZero(rayorder))
@@ -2049,18 +2159,18 @@ class RT13 implements B4constants
         }
 
         // Get the unit groove vector Q in vertex coords.
-        // Method: Q = R cross G
+        // Method: Q = Norm cross G
         // Caution: Q must be a unit vector, even if G is zero, because it will
         // be the foundation of the PQR coordinate system for diffraction.
         // Get the diffraction quantity also.
         // Start with the local surface normal:
 
-        double[] R = new double[13]; 
-        vGetPerp(ray, surf, R); 
+        double[] Norm = new double[13]; 
+        vGetPerp(ray, surf, Norm); 
 
-        qx = -R[RTWL] * gy;
-        qy =  R[RTWL] * gx;
-        qz =  R[RTUL] * gy - R[RTVL] * gx;
+        qx = -Norm[RTWL] * gy;
+        qy =  Norm[RTWL] * gx;
+        qz =  Norm[RTUL] * gy - Norm[RTVL] * gx;
 
         // normalize these
         qq = U.sqr(qx) + U.sqr(qy) + U.sqr(qz); 
@@ -2081,15 +2191,15 @@ class RT13 implements B4constants
 
         // Get the local groove perpendicular P in vertex coordinates
 
-        px = qy * R[RTWL] - qz * R[RTVL];   // P = Q x R = groove perp
-        py = qz * R[RTUL] - qx * R[RTWL];
-        pz = qx * R[RTVL] - qy * R[RTUL];
+        px = qy * Norm[RTWL] - qz * Norm[RTVL];   // P = Q x R = groove perp
+        py = qz * Norm[RTUL] - qx * Norm[RTWL];
+        pz = qx * Norm[RTVL] - qy * Norm[RTUL];
 
         // Get the incident ray direction in local groove coordinates:
 
         sp = px*ray[RTUL] + py*ray[RTVL] + pz*ray[RTWL];  // incident dot grooveperp
         sq = qx*ray[RTUL] + qy*ray[RTVL] + qz*ray[RTWL];  // incident dot groove
-        sr = R[RTUL]*ray[RTUL] + R[RTVL]*ray[RTVL] + R[RTWL]*ray[RTWL];  // inc dot normal
+        sr = Norm[RTUL]*ray[RTUL] + Norm[RTVL]*ray[RTVL] + Norm[RTWL]*ray[RTWL];  // inc dot normal
         double posdot = (sr >= 0.0) ? 1.0 : -1.0; 
 
         // Diffract the ray in local grating coordinates
@@ -2103,9 +2213,9 @@ class RT13 implements B4constants
         sr = dAction * posdot * Math.sqrt(sr2); 
 
         // Put the ray back into vertex coordinates
-        ray[RTUL] = sp*px + sq*qx + sr*R[RTUL];
-        ray[RTVL] = sp*py + sq*qy + sr*R[RTVL];
-        ray[RTWL] = sp*pz + sq*qz + sr*R[RTWL];
+        ray[RTUL] = sp*px + sq*qx + sr*Norm[RTUL];
+        ray[RTVL] = sp*py + sq*qy + sr*Norm[RTVL];
+        ray[RTWL] = sp*pz + sq*qz + sr*Norm[RTWL];
 
         if (!isNormalizedVx(ray))
           U.beep();  // nonnormalized output. 
@@ -2129,7 +2239,7 @@ class RT13 implements B4constants
         Z.vGetZnorm(ray[RTXL], ray[RTYL], surf, q); 
         p[RTUL] = q[0];
         p[RTVL] = q[1];
-        p[RTWL] = q[2]; 
+        p[RTWL] = q[2];  // USUALLY NEGATIVE.  WHY? 
         double soserr = q[0]*q[0] + q[1]*q[1] + q[2]*q[2] - 1.0; 
     }
 

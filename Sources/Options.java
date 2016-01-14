@@ -423,17 +423,20 @@ class Options extends JMenu implements B4constants
     }
 
 
-
-
-
     void doAutoAdjustDialog(JFrame frame)
     {
-        LabelDataBox step = new LabelDataBox(UO_AUTO, 0, NCHARS); 
+        LabelDataBox step  = new LabelDataBox(UO_AUTO, 0, NCHARS); 
         LabelDataBox maxit = new LabelDataBox(UO_AUTO, 1, NCHARS); 
-        LabelDataBox tol = new LabelDataBox(UO_AUTO, 2, NCHARS); 
+        LabelDataBox tol   = new LabelDataBox(UO_AUTO, 2, NCHARS); 
+        // LabelDataBox wx    = new LabelDataBox(UO_AUTO, 3, NCHARS); 
+        // LabelDataBox wy    = new LabelDataBox(UO_AUTO, 4, NCHARS); 
+        // LabelDataBox wz    = new LabelDataBox(UO_AUTO, 5, NCHARS); 
+        // LabelDataBox wu    = new LabelDataBox(UO_AUTO, 6, NCHARS); 
+        // LabelDataBox wv    = new LabelDataBox(UO_AUTO, 7, NCHARS); 
+        // LabelDataBox ww    = new LabelDataBox(UO_AUTO, 8, NCHARS);         
 
         int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {step, maxit, tol}, 
+           new Object[] {step, maxit, tol},  // wx, wy, wz, wu, wv, ww}, 
            "AutoAdjust Options", 
            JOptionPane.OK_CANCEL_OPTION, 
            JOptionPane.PLAIN_MESSAGE,
@@ -444,10 +447,14 @@ class Options extends JMenu implements B4constants
             DMF.reg.putuo(UO_AUTO, 0, step.getText()); 
             DMF.reg.putuo(UO_AUTO, 1, maxit.getText()); 
             DMF.reg.putuo(UO_AUTO, 2, tol.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 3, wx.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 4, wy.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 5, wz.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 6, wu.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 7, wv.getText()); 
+            // DMF.reg.putuo(UO_AUTO, 8, ww.getText()); 
         }
     }
-
-
 
 
     void doPlot2Dialog(JFrame frame)
@@ -773,8 +780,6 @@ class Options extends JMenu implements B4constants
 
 
 
-
-
     void doRandomDialog(JFrame frame)
     // this version from A154 with distributions
     {
@@ -924,6 +929,7 @@ class Options extends JMenu implements B4constants
         aPanel.add(new JLabel("  F8 or Ctl/Cmd Right:  widen field")); 
         aPanel.add(new JLabel("  F9 or Alt Right:         split field"));
         aPanel.add(new JLabel("  F10 or Alt Down:      copy down")); 
+        aPanel.add(new JLabel("  Ctl-Alt-Down:        copy to bottom"));
         aPanel.add(new JLabel("  Ctl/Cmd Z:           undo & redo")); 
         aPanel.setBorder(BorderFactory.createTitledBorder("Special Editor Keys"));
 

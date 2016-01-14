@@ -27,7 +27,10 @@ package com.stellarsoftware.beam;
   *    axisymmetric curved surfaces.
   *
   * Perp vector methods pXXXX() are unused as of Aug 2006.
-  *   N = normalize( df/dx, df/dy, -1.0); 
+  *   N = normalize( df/dx, df/dy, -1.0); reversed Oct 7, 2015, A189; line 99.
+  *
+  *---eliminating |y|: lines 225, 527, 546, 548, 552, 563;  A190 Dec 2015
+  *
   *
   *
   * @author M.Lampton (c) STELLAR SOFTWARE 2006 all rights reserved.
@@ -68,6 +71,7 @@ class Z implements B4constants
     // x, y, and surf[] are input; result is norm[3].
     // Each method called gives its gradient in norm[0], norm[1];
     // Converted to normalized normal at end of this method.
+    // A189: changed signs so that norm[2] is towards +z. 
     {
         x = dSawtoothX(x, surf); 
         y = dSawtoothY(y, surf); 
@@ -90,7 +94,9 @@ class Z implements B4constants
            case OSBICONIC: vGradBiconic(x, y, surf, norm); break; 
            default:        vGradPlane(norm); break; 
         }
-        norm[2] = -1.0;
+        norm[0] *= -1.0;    // 2015 Oct 7, A189
+        norm[1] *= -1.0;    // 2015 Oct 7, A189
+        norm[2] = +1.0;     // 2015 Oct 7, A189
         normalize(norm); 
     }
 
@@ -216,7 +222,7 @@ class Z implements B4constants
 
         //---------add polynomial terms-----------
 
-        y = Math.abs(y); 
+        // y = Math.abs(y); // exploring this change A190 Dec 2015
         double sum = 0.0; 
         for (int i=14; i>=1; i--)
           sum = (sum + surf[i+OA1-1])*y;
@@ -496,6 +502,7 @@ class Z implements B4constants
     // Poly2D alone; gives unnormalized gradient. 
     // Copyright 2006 STELLAR SOFTWARE all rights reserved
     {
+        // System.out.println("class Z, vGradPolyRev has been called."); 
         double r2 = x*x + y*y; 
         double r = Math.sqrt(r2); 
         grad[0] = 0.0; 
@@ -518,7 +525,8 @@ class Z implements B4constants
     // Polynomial terms OS1..OA14 are included.
     // Copyright 2007 STELLAR SOFTWARE all rights reserved.
     {
-        double absy = Math.abs(y); 
+        // System.out.println("class Z, vGradToric has been called."); 
+        // double absy = Math.abs(y); 
         double sy = surf[OASPHER] + 1.0; 
         double cx = surf[OCURVX]; 
         double cy = surf[OCURVE]; 
@@ -537,19 +545,21 @@ class Z implements B4constants
 
         //--------polyValue(y)----------
         double polyValue = 0.0; 
-        if (absy>0.0)
+        // if (absy>0.0)
           for (int i=14; i>=1; i--)
-            polyValue = (polyValue + surf[i+OA1-1])*absy;
+            polyValue = (polyValue + surf[i+OA1-1])*y;   // y not absy;
 
         //--------polyDeriv(y)--------
         double polyDeriv = 0.0; 
-        if (Math.abs(y)>0.0)
+        if (Math.abs(y)>0.0)   // away from y=0 use this formula
         {
             double sum = 0.0; 
             for (int i=14; i>=1; i--)
-              sum = (sum + i*surf[i+OA1-1])*y;
+              sum = (sum + i*surf[i+OA1-1])*y;    
             polyDeriv = sum/y; 
         }
+        else
+           polyDeriv = surf[OA1]; 
 
         double fy = conicValue + polyValue; 
         double dfdy = conicDeriv + polyDeriv; 

@@ -9,11 +9,11 @@ import javax.swing.text.*;  // BadLocationException
 /**
   *  This file has just one class: OEJIF that extends EJIF,
   *  supplying EJIF's abstract method parse(). 
+  *  The function of parse() is to set values into DMF.giFlags[] and RT13.surfs[][]. 
   *
   *  It implements Constants via EJIF. 
   *
   *  parse() has no dirty bit worksavers; it always parses. 
-  *
   *
   *  @author M.Lampton (c) 2004-2012 STELLAR SOFTWARE all rights reserved.
   */
@@ -30,7 +30,7 @@ class OEJIF extends EJIF
     public OEJIF(int iXY, String gfname) 
     {
         super(0, iXY, ".OPT", gfname, MAXSURFS); // call EJIF
-        myFpath = gfname; // field of EJIF.
+        myFpath = gfname;                        // field of EJIF.
     }
 
 
@@ -46,8 +46,8 @@ class OEJIF extends EJIF
         int status[] = new int[NGENERIC]; 
         vPreParse(status); 
         DMF.giFlags[OPRESENT] = status[GPRESENT]; 
-        DMF.giFlags[ONLINES] = status[GNLINES]; 
-        DMF.giFlags[ONSURFS] = nsurfs = status[GNRECORDS]; 
+        DMF.giFlags[ONLINES]  = status[GNLINES]; 
+        DMF.giFlags[ONSURFS]  = nsurfs = status[GNRECORDS]; 
         DMF.giFlags[ONGROUPS] = nsurfs; 
         DMF.giFlags[ONFIELDS] = nfields = status[GNFIELDS]; 
         if (nsurfs < 1)
@@ -61,7 +61,8 @@ class OEJIF extends EJIF
         {
             oglasses[j] = "";
             for (int ia=0; ia<ONPARMS; ia++)
-              RT13.surfs[j][ia] = -0.0; // minus zero for blank
+              RT13.surfs[j][ia] = -0.0; // minus zero means blank entry.
+              
             RT13.surfs[j][OREFRACT] = 1.0; 
             RT13.jstart[j] = j;  // groups
             RT13.jstop[j]  = j;  // groups
@@ -83,7 +84,7 @@ class OEJIF extends EJIF
         for (int f=0; f<nfields; f++)
           headers[f] = getFieldTrim(f, 1); 
 
-        //--build the two-way lookup tables for field IDs-------
+        //--build the two one-way lookup tables for field IDs-------
 
         for (int i=0; i<ONPARMS; i++)   // ABSENT = -1
           oI2F[i] = ABSENT;  
@@ -115,6 +116,7 @@ class OEJIF extends EJIF
         }
           
         //-----first parse the optics type column---------
+        
         int ifield = oI2F[OTYPE]; 
         if (ifield > ABSENT)
           for (int jsurf=1; jsurf<=nsurfs; jsurf++)
@@ -272,7 +274,7 @@ class OEJIF extends EJIF
                   continue; 
                 if (ia == OGROUP)   // group analyzed above...
                   continue; 
-                if (ia > ABSENT)    // numerical field overwrites negZero
+                if (ia > ABSENT)    // all numerical fields can overwrite negZero here. 
                 {
                     // first, fill in the datum....
                     d = RT13.surfs[jsurf][ia] = getFieldDouble(f, 2+jsurf);
@@ -293,9 +295,11 @@ class OEJIF extends EJIF
                         break; 
                     } 
 
-                    // finally complete doubly defined parameters...
+                    // allow defined shape to determine asphericity...
                     if ((ia == OSHAPE) && !U.isNegZero(d))
                       RT13.surfs[jsurf][OASPHER] = d - 1.0; 
+                      
+                    // allow defined radii of curvature to determine curvature...  
                     if ((ia == ORAD) && (d != 0.0))
                       RT13.surfs[jsurf][OCURVE] = 1.0/d; 
                     if ((ia == ORADX) && (d != 0.0))
@@ -430,7 +434,9 @@ class OEJIF extends EJIF
         //
         // Adjustability:  see below. 
         // Special case added in A119 Dec 2010:
-        //  CX=nonblank and CY=nonblank: OSBICONIC
+        //    CX=nonblank and CY=nonblank: OSBICONIC
+        //
+        //  TERNARY LOGIC: see lines 453-463.
 
         boolean badZern = false;     // flag for single warning message at end
         
@@ -443,17 +449,28 @@ class OEJIF extends EJIF
             double  ax = RT13.surfs[j][OASPHX];
             double  ay = RT13.surfs[j][OASPHY]; 
             
-            //---ternary logic evaluator starts here-----
-            //---This should be replaced with a quad detector----     
+            //---TERNARY LOGIC EVALUATOR starts here-----
+            //---three states: empty field, entry=0, entry is nonzero------
+            //---Determined by Curv and Cx; Cy has no influence---------  
             
             boolean bCEactive = (ce!=0.0) || isAdjustable(j, OCURVE);
             boolean bCXactive = (cx!=0.0) || isAdjustable(j, OCURVX); 
-            int tce = bCEactive ? 2 : U.isNegZero(ce) ? 0 : 1; 
-            int tcx = bCXactive ? 2 : U.isNegZero(cx) ? 0 : 1; 
-            int tg[] = { OSPLANO, OSPLANO, OSCONIC,
-                         OSPLANO, OSPLANO, OSYCYL,
-                         OSXCYL,  OSXCYL,  OSTORIC}; 
-            int iProfile = tg[tce + 3*tcx]; 
+            int tce = bCEactive ? 2 : U.isNegZero(ce) ? 0 : 1;   // 0, 1, or 2.
+            int tcx = bCXactive ? 2 : U.isNegZero(cx) ? 0 : 1;   // 0, 1, or 2.
+            int tg[] = { OSPLANO, OSPLANO, OSCONIC, OSPLANO, OSPLANO, OSYCYL, OSXCYL,  OSXCYL,  OSTORIC}; 
+            int arg = tce + 3*tcx; 
+            int iProfile = tg[arg]; 
+            
+            // String osnames[] = {"OSPLANO", "OSPLANO", "OSCONIC", "OSPLANO", "OSPLANO", "OSYCYL", "OSXCYL", "OSXCYL", "OSTORIC"}; 
+            // if (j==1)
+            //   System.out.println("OEJIF ternary logic result: iProfile = "+iProfile+"  "+osnames[arg]);
+            
+            // Rules, A190:
+            // PolyCyl: requires axis=x, Cx=0 (uncurved in XZ plane), Curve=Nonzero, poly in y: OSYCYL.
+            // CircCyl: can have axis=x, Cx=0 (uncurved in XZ plane), Curve=Nonzero, no poly;  OSYCYL.
+            // CircCyl: or have  axis=y, Cx=nonzero, Curve=blank or zero, no poly terms:  OSXCYL
+            // Toric:   requires Curve=nonzero, Cx=nonzero. 
+            //
             //----ternary logic evaluator ends here-----
             
             //----test for biconic---------------------

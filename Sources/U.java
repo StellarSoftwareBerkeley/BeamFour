@@ -221,28 +221,21 @@ class U implements B4constants
         return x - p*Math.round(x/p); 
     }
 
-    static double cosd(double x)
+    static double cosd(double deg)
     {
-        return Math.cos(Math.toRadians(x)); 
+        return Math.cos(Math.toRadians(deg)); 
     }
 
-    static double sind(double x)
+    static double sind(double deg)
     {
-        return Math.sin(Math.toRadians(x)); 
+        return Math.sin(Math.toRadians(deg)); 
     }
 
-    static double tand(double x)
+    static double tand(double deg)
     {
-        return Math.tan(Math.toRadians(x)); 
+        return Math.tan(Math.toRadians(deg)); 
     }
 
-    static double arccosd(double x)
-    {
-        if (Math.abs(x) > 1.0)
-          return -0.0; 
-        return Math.toDegrees(Math.acos(x)); 
-    }
-        
     static int imax3(int a, int b, int c)
     {
         return Math.max(a, Math.max(b, c)); 

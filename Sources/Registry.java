@@ -55,7 +55,6 @@ class Registry implements B4constants
         int n = readOptions(); 
         if (n != nTotal)
         {
-           // System.out.println("Registry: nRead, nRequired = " + n + "  "+nTotal); 
            imposeFactory(); 
            saveOptions(); 
         }
@@ -127,13 +126,11 @@ class Registry implements B4constants
                   String s = br.readLine(); 
                   if ((s == null) || (s.length() < 1))
                   {
-                      // System.out.println("Reg: readOptions() finds empty line. Exiting."); 
                       return nGoodLines;          // length failure; bail out.
                   }
                   String t = getField(0, s);    // read the item name.
                   if (!t.equals(UO[g][j][0]))   // test it against UO.
                   {
-                      // System.out.println("Reg: readOptions() discrepancy. "+t+"  "+UO[g][j][0]); 
                       return nGoodLines;          // name disagreement; bail out.
                   }
                   sUser[g][j] = getField(1, s); // read & install preference

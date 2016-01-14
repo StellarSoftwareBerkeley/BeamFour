@@ -7,17 +7,19 @@ import java.awt.*;   // Color
   * 
   * 
   *  All fields here are public static final. (H&C p.206)
-  *  Added RTDOT  ray dot normal any surface, March 2015 MLL. 
+  *  Added RTANGLE between ray and normal any surface, March 2015, Oct 2015.
+  *  Added RTNORMX, RTNORMY, RTNORMZ as new ray attributes. 
+  *  Added lower case i, j, k to read out the surface normal vector. 
   *
   *  @author M.Lampton STELLAR SOFTWARE (c) 2004-2014 all rights reserved.
   */
 interface B4constants
 {
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 184, 31 August 2015";
+    static final String  RELEASE    = "Release 190, 13 January 2016";
     // fill in your compiler below... "Compiler was: Javac 1.6.0_65" for user compatibility
     static final String  COMPILER   = "Compiler was: Javac 1.6.0_65";
-    static final String  COPYRIGHT  = "(c) 2015 Stellar Software"; 
+    static final String  COPYRIGHT  = "(c) 2016 Stellar Software"; 
     static final char    NULLCHAR   = (char) 0;
     
     static final int BLINKMILLISEC      = 300; // millisec
@@ -90,7 +92,7 @@ interface B4constants
     static final double NEGZERO     = -0.0; 
     static final double TWOPI       = 2.0*Math.PI;
     static final double ROOT2       = Math.sqrt(2.0); 
-    static final double LN10        = 2.3025850929940456840;
+    static final double LN10        = Math.log(10.0);
     static final double BADVAL      = -9.876543E-210; 
     static final double PMAKEUP     = +2.00001;
     static final double MMAKEUP     = -2.00001;
@@ -303,9 +305,9 @@ interface B4constants
     static final int OCURVE    =  9; // axisymmetric curvature
     static final int OCURVX    = 10; // curvature in x: cyl, toric, biconic
     static final int OCURVY    = 11; // curvature in y; cyl, toric, biconic   
-    static final int ORAD      = 12; // converted in OEJIF.
-    static final int ORADX     = 13; // converted in OEJIF.
-    static final int ORADY     = 14; // convverted in OEJIF
+    static final int ORAD      = 12; // radius of curvature; converted in OEJIF.
+    static final int ORADX     = 13; // radius of curvature; converted in OEJIF.
+    static final int ORADY     = 14; // radius of curvature; converted in OEJIF
 
     static final int OASPHER   = 15; // axisymmetric asphericity; RT13
     static final int OASPHX    = 16; // biconic only
@@ -329,9 +331,9 @@ interface B4constants
     static final int OA13      = 32;
     static final int OA14      = 33;
 
-    static final int OGX       = 34; // grating groove density
-    static final int OGY       = 35; // grating groove density  
-    static final int OORDER    = 36; // diffraction order
+    static final int OGX       = 34; // any of this set triggers GROOVY
+    static final int OGY       = 35;
+    static final int OORDER    = 36; 
     static final int OVLS1     = 37;
     static final int OVLS2     = 38;
     static final int OVLS3     = 39;
@@ -736,7 +738,13 @@ interface B4constants
        {  // group 2 = UO_AUTO
           {"Step size",            "1E-6"},    // 0
           {"Max Iter",              "100"},    // 1
-          {"Tolerance",           "1E-12"}     // 2
+          {"Tolerance",           "1E-12"},    // 2
+          {"Weight Xgoal",          "1.0"},    // 3
+          {"Weight Ygoal",          "1.0"},    // 4
+          {"Weight Zgoal",          "1.0"},    // 5
+          {"Weight Ugoal",          "1.0"},    // 6
+          {"Weight Vgoal",          "1.0"},    // 7
+          {"Weight Wgoal",          "1.0"}     // 8
        },
 
        {  // group 3 = UO_PLOT2

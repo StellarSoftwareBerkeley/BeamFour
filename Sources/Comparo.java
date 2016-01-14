@@ -144,7 +144,7 @@ class Comparo implements B4constants
         for (int f=0; f<rnfields; f++)
         {
             int op = REJIF.rF2I[f]; 
-            if (op >= RGOAL)                       // allows WFE
+            if (op >= RGOAL)                       // allows WFE; RGOAL=10100.
             {
                 if (igoal >=MAXGOALS)
                   igoal = MAXGOALS-1;              // graceful overflow

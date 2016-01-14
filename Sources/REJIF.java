@@ -29,11 +29,17 @@ import javax.swing.text.*;  // BadLocationException
   * Better to just search the rF2I[] list.
   * Table returns RABSENT for unrecognized field. 
   * But remember to reinterpret RFINAL and RGOAL for output usage.
-  *  * To support AutoAdjust, need an output list for all goals,
+  *  
+  * To support AutoAdjust, need an output list for all goals,
   * and field numbers for those goals, so that each ray can
   * have its discrepancy computed. DCRFs are defined in OEJIF. 
   *
-  *  Added RTDOT attribute into RNATTRIBS, March 2015 MLL. 
+  *  Added RTANGLE attribute into RNATTRIBS, March 2015 MLL. 
+  *  Added RTNORMX, RTNORMY, RTNORMZ as new ray attributes. 
+  *  Added lower case i, j, k to read out these normal components. 
+  *
+  * Although this does all the parsing and initial setup work, the actual results
+  * get posted by InOut grabbing data from RT13's output data tables. 
   *
   * @author M.Lampton (c) STELLAR SOFTWARE 2004, 2015 all rights reserved.
   */
@@ -143,12 +149,13 @@ class REJIF extends EJIF
                 wavefield = DMF.giFlags[RWAVEFIELD] = field; 
                 DMF.giFlags[RALLWAVESPRESENT] = 1;  // true; 
             } 
-            if ((op>=RGOAL) && (op<RGOAL+13))
+            if ((op>=RGOAL) && (op<RGOAL+13))    // RGOAL=10100=Xg; 10101=YG; ... 10112=wg.
               ngoals++; 
             if (op % 100 == RTWFE)
               DMF.giFlags[RWFEFIELD] = fwfe = field; 
         }
         DMF.giFlags[RNGOALS] = ngoals;  // + ((fwfe>=0) ? 1 : 0); 
+        // System.out.println("Ngoals = "+ ngoals); 
 
         DMF.giFlags[RUVWCODE] = iU + 2*iV + 4*iW; 
 
