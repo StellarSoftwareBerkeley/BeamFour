@@ -172,6 +172,8 @@ class OEJIF extends EJIF
                                break; 
                            }
                            break;
+                 case 't':
+                 case 'T': RT13.surfs[jsurf][OTYPE] = OTTHIN;
                  default: RT13.surfs[jsurf][OTYPE] = OTLENS; break; 
                }
                typetag[jsurf] = getTag(ifield, 2+jsurf); 
@@ -802,7 +804,11 @@ class OEJIF extends EJIF
                     return OIDIAM;       
           
           case 'F':
-          case 'f': return OFORM;  // "form" = nonnumerical
+          case 'f': switch(c2up)
+                    {
+                      case 'c': return OFOCAL; // focal length for thin perfect lenses
+                      default: return OFORM;  // "form" = nonnumerical
+                    }
 
           case 'G':
           case 'g': switch(c1up)   // Group or Grating groove density
