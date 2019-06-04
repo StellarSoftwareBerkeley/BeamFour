@@ -806,7 +806,7 @@ class OEJIF extends EJIF
           case 'F':
           case 'f': switch(c2up)
                     {
-                      case 'c': return OFOCAL; // focal length for thin perfect lenses
+                      case 'C': return OFOCAL; // focal length for thin perfect lenses
                       default: return OFORM;  // "form" = nonnumerical
                     }
 
