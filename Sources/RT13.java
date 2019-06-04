@@ -1828,11 +1828,11 @@ class RT13 implements B4constants
     {
       double focal = surf[OFOCAL];
       double mx, my;
-      mx = ray[RTUL] / Math.sqrt(1 - Math.pow(ray[RTUL], 2));
-      ray[RTUL] = (mx + ray[RTXL]) / Math.sqrt(Math.pow(focal, 2) + (mx + ray[RTXL]));
-      my = ray[RTVL] / Math.sqrt(1 - Math.pow(ray[RTVL], 2));
-      ray[RTVL] = (my + ray[RTYL]) / Math.sqrt(Math.pow(focal, 2) + (my + ray[RTYL]));
-      ray[RTWL] = Math.sqrt(1 - Math.pow(ray[RTUL], 2) + Math.pow(ray[RTVL], 2));
+      mx = focal * ray[RTUL] / Math.sqrt(1 - Math.pow(ray[RTUL], 2));
+      my = focal * ray[RTVL] / Math.sqrt(1 - Math.pow(ray[RTVL], 2));
+      ray[RTUL] = (mx - ray[RTXL]) / Math.sqrt(Math.pow(focal, 2) + Math.pow((mx - ray[RTXL]), 2));
+      ray[RTVL] = (my - ray[RTYL]) / Math.sqrt(Math.pow(focal, 2) + Math.pow((my - ray[RTYL]), 2));
+      ray[RTWL] = Math.sqrt(1 - Math.pow(ray[RTUL], 2) - Math.pow(ray[RTVL], 2));
       return RROK; 
     }
 
