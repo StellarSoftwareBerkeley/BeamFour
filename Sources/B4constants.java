@@ -417,7 +417,8 @@ interface B4constants
     static final int OTYPE     = 120; // 0=lens, 1=mirror, 2=iris...
     static final int OFORM     = 121; // 0=ellip, 1=rect...
     static final int OPROFILE  = 122; // 0=plane, 1=conic...
-    static final int ONPARMS   = 123; // array size.
+    static final int OFOCAL    = 123; //focal length of thin lens
+    static final int ONPARMS   = 124; // array size.
 
 /*-------------OTABLE strings for OEJIF diagnostic-----------*/
 
@@ -456,7 +457,8 @@ interface B4constants
     static final int OTCBOUT     = 10; // coordinate break output
     static final int OTBLFRONT   = 11; // bimodal lens front
     static final int OTBLBACK    = 12; // bimodal lens back
-    static final int OTUNK       = 13; // unknown type; SNH.
+    static final int OTTHIN      = 13; // perfect thin lens
+    static final int OTUNK       = 14; // unknown type; SNH.
 
     // phantom is merely an OTLENS with equal indices.
 
@@ -474,6 +476,7 @@ interface B4constants
     "cbOutput",  // 10
     "bilens_f",  // 11  bimodal lens front surface
     "bilens_r",  // 12  bimodal lens rear surface
+    "thin",      // 13  perfect thin lens
     "unknown"};  // 11  SNH
 
 /*-----------OPROFILE attributes and strings------------------*/
