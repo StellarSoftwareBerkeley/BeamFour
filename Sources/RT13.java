@@ -1791,6 +1791,8 @@ class RT13 implements B4constants
                     return iCBIN(rayseq, surf, g);  // copy previous local uvw
              case OTCBOUT: // CoordBreak output surface 
                     return iCBOUT(rayseq, surf, g); // copy previous local xyzuvw
+             case OTTHIN:
+                    return iThin(rayseq[g],surf);
         }
         return RRNON; 
     }
@@ -1820,6 +1822,19 @@ class RT13 implements B4constants
         return RROK; 
     }
 
+    static private int iThin(double rayseq[], double surf[])
+    // CoordBreak CBout output surface method
+    // Must copy previous local xyzuvw into this local surface.
+    {
+      double focal = surf[OFOCAL];
+      double mx, my;
+      mx = ray[RTUL] / Math.sqrt(1 - Math.pow(ray[RTUL], 2));
+      ray[RTUL] = (mx + ray[RTXL]) / Math.sqrt(Math.pow(focal, 2) + (mx + ray[RTXL]));
+      my = ray[RTVL] / Math.sqrt(1 - Math.pow(ray[RTVL], 2));
+      ray[RTVL] = (my + ray[RTYL]) / Math.sqrt(Math.pow(focal, 2) + (my + ray[RTYL]));
+      ray[RTWL] = Math.sqrt(1 - Math.pow(ray[RTUL], 2) + Math.pow(ray[RTVL], 2));
+      return RROK; 
+    }
 
     static private int iMirror(double ray[], double surf[])
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
