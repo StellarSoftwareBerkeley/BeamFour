@@ -173,7 +173,7 @@ class OEJIF extends EJIF
                            }
                            break;
                  case 't':
-                 case 'T': RT13.surfs[jsurf][OTYPE] = OTTHIN;
+                 case 'T': RT13.surfs[jsurf][OTYPE] = OTTHIN; break;
                  default: RT13.surfs[jsurf][OTYPE] = OTLENS; break; 
                }
                typetag[jsurf] = getTag(ifield, 2+jsurf); 

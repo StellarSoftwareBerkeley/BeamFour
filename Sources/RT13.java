@@ -1822,7 +1822,7 @@ class RT13 implements B4constants
         return RROK; 
     }
 
-    static private int iThin(double rayseq[], double surf[])
+    static private int iThin(double ray[], double surf[])
     // CoordBreak CBout output surface method
     // Must copy previous local xyzuvw into this local surface.
     {
