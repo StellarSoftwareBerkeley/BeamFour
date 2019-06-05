@@ -1827,6 +1827,7 @@ class RT13 implements B4constants
     // Must copy previous local xyzuvw into this local surface.
     {
       double focal = surf[OFOCAL];
+      int sign = (int) Math.signum(focal);
       double[] r = new double[3];
       double d;
       d = focal / ray[RTWL];
@@ -1834,9 +1835,9 @@ class RT13 implements B4constants
       r[1] = ray[RTVL] * d - ray[RTYL];
       r[2] = focal;
       d = Math.sqrt(r[0] * r[0] + r[1] * r[1] + r[2] * r[2]);
-      ray[RTUL] = r[0] / d;
-      ray[RTVL] = r[1] / d;
-      ray[RTWL] = Math.abs(r[2] / d);
+      ray[RTUL] = sign * r[0] / d;
+      ray[RTVL] = sign * r[1] / d;
+      ray[RTWL] = sign * r[2] / d;
       return RROK; 
     }
 
