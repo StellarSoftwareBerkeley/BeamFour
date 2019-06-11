@@ -383,7 +383,8 @@ interface B4constants
     static final int OZ33      = 83; 
     static final int OZ34      = 84; 
     static final int OZ35      = 85; 
-    static final int OFINALADJ = 86; // final autoadjustable parameter
+    static final int OFOCAL    = 86; //focal length of thin lens
+    static final int OFINALADJ = 87; // final autoadjustable parameter
 
     static final int OTIRINDEX = 91;
     static final int OODIAOBS  = 92; // observed from trace
@@ -417,8 +418,7 @@ interface B4constants
     static final int OTYPE     = 120; // 0=lens, 1=mirror, 2=iris...
     static final int OFORM     = 121; // 0=ellip, 1=rect...
     static final int OPROFILE  = 122; // 0=plane, 1=conic...
-    static final int OFOCAL    = 123; //focal length of thin lens
-    static final int ONPARMS   = 124; // array size.
+    static final int ONPARMS   = 123; // array size.
 
 /*-------------OTABLE strings for OEJIF diagnostic-----------*/
 
