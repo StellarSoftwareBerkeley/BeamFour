@@ -27,7 +27,7 @@ class Comparo implements B4constants
     
     private static OEJIF optEditor = null; 
     private static REJIF rayEditor = null; 
-    private static int ngroups=0, nrays=0, onfields=0, rnfields=0;
+    private static int nrays=0, nsurfs=0, onfields=0, rnfields=0;
     private static int ngood=0, ngoals=0, nadj=0; 
     private static int npts=0; 
     private static double sos=0.0;
@@ -62,7 +62,7 @@ class Comparo implements B4constants
         {
             for (int kray=1; kray<=nrays; kray++)
             {
-                if (RT13.bGoodRay[kray])
+                if (RT13.isRayOK[kray])
                   for (int igoal=0; igoal<ngoals; igoal++)
                   {
                       double t1 = getRay(kray, goalAttrib[igoal]); 
@@ -77,7 +77,7 @@ class Comparo implements B4constants
         if (bHasWFE)  // implicit goal case
         {
             for (int kray=1; kray<=nrays; kray++)
-              if (RT13.bGoodRay[kray])
+              if (RT13.isRayOK[kray])
               {
                   resid[npts] = getRay(kray, RTWFE);
                   sos += resid[npts]*resid[npts]; 
@@ -109,9 +109,9 @@ class Comparo implements B4constants
     {
         optEditor = DMF.oejif;
         rayEditor = DMF.rejif;
-        ngroups   = DMF.giFlags[ONGROUPS]; 
         onfields  = DMF.giFlags[ONFIELDS];       // fields per optic.
         nrays     = DMF.giFlags[RNRAYS]; 
+        nsurfs    = DMF.giFlags[ONSURFS]; 
         rnfields  = DMF.giFlags[RNFIELDS];       // fields per ray.
         ngoals    = DMF.giFlags[RNGOALS];        // verified above. 
         bHasWFE   = DMF.giFlags[RWFEFIELD] > RABSENT; 
@@ -119,7 +119,7 @@ class Comparo implements B4constants
         if ((optEditor==null) || (rayEditor==null))
           return false; // SNH graying.
 
-        if ((ngroups<1) || (onfields<1) || (nrays<1) || (rnfields<1))
+        if ((onfields<1) || (nrays<1) || (rnfields<1))
           return false; // SNH graying. 
 
         if ((ngoals < 1) && !bHasWFE)
@@ -164,11 +164,11 @@ class Comparo implements B4constants
 
 
 
-    private static double getRay(int kray, int iattrib)
+    private static double getRay(int kray, int iattrib)  // at final surface
     {
         if ((iattrib>=RX) && (iattrib<RNATTRIBS))
         {
-            double d = RT13.dGetRay(kray, ngroups, iattrib);
+            double d = RT13.dGetRay(kray, nsurfs, iattrib); 
             return d; 
         }
         return -0.0;
@@ -187,7 +187,7 @@ class Comparo implements B4constants
         {
             int f = goalField[igoal]; 
             for (int kray=1; kray<=nrays; kray++)
-              bLookedAt[kray] = !RT13.bGoodRay[kray];  
+              bLookedAt[kray] = !RT13.isRayOK[kray];  
 
             for (int ktop=1; ktop<=nrays; ktop++) // search for top ray this tag
             {
@@ -207,7 +207,7 @@ class Comparo implements B4constants
                 double value = 0.0; // average will include ktop itself. 
                 for (int k=ktop; k<=nrays; k++)
                 {
-                    if (RT13.bGoodRay[k] 
+                    if (RT13.isRayOK[k] 
                     && !bLookedAt[k] 
                     && (tag==rayEditor.getTag(f,k+2)))
                     {

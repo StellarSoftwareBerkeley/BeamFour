@@ -24,12 +24,13 @@ import javax.swing.*;
   *    + add random rays to a MTF
   *
   * 
-  *  Uses RT13 for rayseq[][] and runray().
-  *  Actually, no random rays are generated herein,
-  *  nor are any ray calculations are performed here.
-  *  This routine's client panel simply manages RT13 ray number zero.
-  *  All the math work is done within RT13.
-  *  Only the kickoff management is done here. 
+  * 
+  *  For each random ray, this timer task requests that the
+  *  owner "targetPanel.doRandomRay()" and return True or False. 
+  *
+  *  The targetPanel gets results by requesting RT13.bRunRandomRay(),
+  *  and then uses RT13.dGetRay(0, hsurf, hattr) to gather each point. 
+  *  Only the kickoff management and scorekeeping is done here. 
   *
   *
   *  @author: M.Lampton (c) 2003 STELLAR SOFTWARE all rights reserved.

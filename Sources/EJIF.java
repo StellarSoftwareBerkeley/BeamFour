@@ -676,7 +676,11 @@ abstract class EJIF extends BJIF implements B4constants, AdjustmentListener
     {
         if (ePanel == null)
           return; 
-        ePanel.putFieldDouble(f, r, d); 
+        // blanking negative zeros introduced 26 Dec 2018 A207
+        if (U.isNegZero(d))
+            putBlank(f,r);
+        else  
+            ePanel.putFieldDouble(f, r, d); 
         bDirty = true; 
         // bNeedsParse = true; // not here this is calculation driven
     }

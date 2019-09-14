@@ -5,6 +5,10 @@ import javax.swing.*;      // Graphics2D features
 @SuppressWarnings("serial")
 
 /**
+  * A207.11: eliminated groups; using bimodals; 
+  *    dropping "additional surface" option;
+  *    uses howfarOK[] and skips negative zero data points.
+  *
   * Custom artwork class extends GPanel, supplies artwork.
   * Generates local font information from GetUOGraphicsFontCode().
   * Properly responds to changes in nsurfs & nrays  (A112). 
@@ -31,15 +35,13 @@ public class Plot2Panel extends GPanel
     private int     CADstyle = 0;
     private int     iSymbol = 0; 
 
-    private int     nsurfs, nprev, ngroups, nrays, ngood;
+    private int     nsurfs, nprev, nrays, ngood;
     private int     hsurf, hattr, vsurf, vattr;  
-    private int     prevGroups[] = new int[MAXSURFS+1]; // detect new groups
 
-    private int     jOtherSurface = 0; 
     private String  hst, vst; 
     
     private double  wavel = 0.0; 
-    private boolean blackbkg = false; 
+    private boolean blackbkg = false; // option number 11 see below
     private boolean badUO = false;  
 
 
@@ -63,27 +65,16 @@ public class Plot2Panel extends GPanel
     // Called by GPanel when fresh Plot2Panel artwork is needed.
     {
         nsurfs = DMF.giFlags[ONSURFS];    // always needed.
-        ngroups = DMF.giFlags[ONGROUPS];  // always needed.
         nrays = DMF.giFlags[RNRAYS];      // always needed.
         ngood = RT13.iBuildRays(true);  
         
         String warn = getUOwarning();     // never crashes.
         myGJIF.postWarning(warn); 
         
-        
         if (warn.length() > 0)
           badUO = true;   // use this in setting display scale
         
-        //---see if group assignments have changed----
-        boolean bChanged = false; 
-        for (int j=0; j<MAXSURFS; j++)
-          if (prevGroups[j] != RT13.group[j])
-          {
-              prevGroups[j] = RT13.group[j]; 
-              bChanged = true; 
-          }
-        
-        if ((nprev != nsurfs) || bPleaseParseUO || bChanged)
+        if ((nprev != nsurfs) || bPleaseParseUO)
         {
             nprev = nsurfs; 
             doParseSizes();   // regenerates sizes & scale factors  
@@ -98,7 +89,7 @@ public class Plot2Panel extends GPanel
 
     protected boolean doRandomRay() // replaces abstract "do" method
     {
-        return drawOneRandomRay(); 
+        return drawOneRay(0); 
     }
 
     protected void doCursor(int ix, int iy)  // replaces abstract method
@@ -131,8 +122,6 @@ public class Plot2Panel extends GPanel
 
     private String getUOwarning()
     // This assumes have already set ngood = RT13.iBuildRays().
-    // Ungrouped: ngroups = nsurfs
-    // Grouped:   ngroups < nsurfs
     // Always call this early in doTechList() as an error detector.
     // Place warning into titlebar using myGJIF.postWarning().
     // Remove doParse() sizing and pan+zoom into separate doSizing().
@@ -144,19 +133,19 @@ public class Plot2Panel extends GPanel
     {
         String hst = DMF.reg.getuo(UO_PLOT2, 0); 
         int op = REJIF.getCombinedRayFieldOp(hst); 
-        int hsurf = RT13.getGroupNum(op); 
+        int hsurf = RT13.getSurfNum(op); 
         int hattr = RT13.getAttrNum(op); 
 
         String vst = DMF.reg.getuo(UO_PLOT2, 2); 
         op = REJIF.getCombinedRayFieldOp(vst); 
-        int vsurf = RT13.getGroupNum(op); 
+        int vsurf = RT13.getSurfNum(op); 
         int vattr = RT13.getAttrNum(op); 
 
         String s = ""; 
         if (ngood < 1)         // yikes what about "good" vs "all rays"?
           s += "No good rays ";
           
-        String word = (ngroups<nsurfs) ? "Ngroups="+ngroups : "Nsurfaces="+nsurfs;
+        String word = "Nsurfaces="+nsurfs;
           
         if ((hattr<0) || (hattr>RNATTRIBS) || (hsurf < 0))
         {
@@ -177,7 +166,7 @@ public class Plot2Panel extends GPanel
 
     private void doParseSizes()
     // Analyzes UO fields including "final",  and performs sizing. 
-    // Call this to regenerate sizes: new UO or new nsurfs, ngroups.
+    // Call this to regenerate sizes: new UO or new nsurfs.
     // BE SURE TO CALL getUOWarning() first to verify strings OK.
     // RT13.iBuildRays() was already called in doTechList(). 
     {
@@ -185,22 +174,20 @@ public class Plot2Panel extends GPanel
 
         hst = DMF.reg.getuo(UO_PLOT2, 0); 
         int op = REJIF.getCombinedRayFieldOp(hst); 
-        hsurf = RT13.getGroupNum(op); 
+        hsurf = RT13.getSurfNum(op); 
         hattr = RT13.getAttrNum(op); 
 
         vst = DMF.reg.getuo(UO_PLOT2, 2); 
         op = REJIF.getCombinedRayFieldOp(vst); 
-        vsurf = RT13.getGroupNum(op); 
+        vsurf = RT13.getSurfNum(op); 
         vattr = RT13.getAttrNum(op); 
 
         double h=0, hmin=0, hmax=0, v=0, vmin=0, vmax=0; 
         int ngood=0; 
 
-        jOtherSurface = getOther(ngroups); 
-
         for (int kray=1; kray<=nrays; kray++)
         {
-            if (RT13.bGoodRay[kray])
+            if (RT13.isRayOK[kray])
             {
                 h = RT13.dGetRay(kray, hsurf, hattr); 
                 v = RT13.dGetRay(kray, vsurf, vattr); 
@@ -254,21 +241,10 @@ public class Plot2Panel extends GPanel
     //----------ARTWORK------------------------
     //----------ARTWORK------------------------
     
-/*********    
-    private void add2Dbase(double ux, double uy, int op)
-    {
-        addScaled(ux, uy, 0.0, op, QBASE);  // GPanel service
-    }
-
-    private void add2Dbatch(double ux, double uy, int op) 
-    {
-        addScaled(ux, uy, 0.0, op, QBATCH);  // GPanel service
-    }
-*********/
 
     private void doArt()  
     {
-        blackbkg = "T".equals(DMF.reg.getuo(UO_PLOT2, 12));
+        blackbkg = "T".equals(DMF.reg.getuo(UO_PLOT2, 11));
         iSymbol = DOT; 
         if ("T".equals(DMF.reg.getuo(UO_PLOT2, 6)))
           iSymbol = PLUS; 
@@ -408,103 +384,73 @@ public class Plot2Panel extends GPanel
             addScaled(x, y, 0., ic, QBASE); 
         }
 
-        jOtherSurface = getOther(nrays); 
-
         /// finally... draw the table ray hits. 
 
         for (int k=1; k<=nrays; k++)
-          drawOneTableRay(k); // not random ray
+          drawOneRay(k); // not random ray
 
-    }  //------------------end of doArt()
+    }  //------------------end of doArt()----------
     
     
     
     
 
-    boolean drawOneTableRay(int kray)
-    // Relies upon iSymbol, jOther, hsurf, ..setup as part of doArt().
-    // Not for random rays; table rays have 1<=kray<=nrays. 
+    boolean drawOneRay(int kray)
+    // Relies upon iSymbol, hsurf, ..setup as part of doArt().
+    // Handles random rays k=0 also table rays 1<=kray<=nrays. 
+    // A207.11 Dec 2018 with bimodals; no groups; no OtherSurface.
+    // Plot all that reach these two surfaces, or only OK rays
+    // These are UO_PLOT2D option 9 "good" vs option 10 "all"
+    // Table rays are plotted as part of QBASE
+    // Random rays are plotted as part of QBATCH.
     {
-        int jmin = ngroups;
-        if(DMF.reg.getuo(UO_PLOT2, 10).equals("T")) 
-          jmin = U.imax3(hsurf, vsurf, jOtherSurface); 
-
-        // jmin now encapsulates our complete success criterion
-
-        boolean bStatus = (RT13.getHowfarRay(kray) >= jmin); 
-        if (bStatus)
+        // First get a ray: new random, or from existing table
+        boolean isGood; 
+        int base; 
+        if (kray==0)
         {
-            int icolor = (int) RT13.raystarts[kray][RSCOLOR]; 
-            if (blackbkg && (icolor==BLACK))
-              icolor = WHITE; 
+           isGood = RT13.bRunRandomRay();
+           base = QBATCH;
+        }
+        else
+        {
+           isGood = RT13.isRayOK[kray]; 
+           base = QBASE;
+        }
+    
+        // Now test the ray
+        
+        boolean bHasEnough = RT13.getHowfarOK(kray) >= Math.max(hsurf, vsurf);        
+        boolean bHasComplete = RT13.getHowfarOK(kray) == nsurfs; 
+        boolean bWantEnough  = DMF.reg.getuo(UO_PLOT2, 10).equals("T"); // option 10 is "Sufficient"
+        boolean bWantComplete = DMF.reg.getuo(UO_PLOT2, 9).equals("T");  // option 9 is "Complete"
 
+        int iColor;
+        if (kray==0)
+            iColor = (int) RT13.raystarts[RT13.getGuideRay()][RSCOLOR];
+        else
+            iColor = (int) RT13.raystarts[kray][RSCOLOR]; 
+        if (blackbkg && (iColor==BLACK))
+            iColor = WHITE;  
+        if (DEBUG)
+        {
+           System.out.println("Plot2Panel.drawOneRay has iSymbol, iColor = " + iSymbol + "  " + iColor); 
+           System.out.println("Plot2panel.drawOneRay()  bHasComplete, bHasEnough, bWantComplete, bWantEnough = "
+               +bHasComplete+bHasEnough+bWantComplete+bWantEnough);   
+        }
+        if ((bWantEnough && bHasEnough) || (bWantComplete && bHasComplete))
+        {
             double xxx = RT13.dGetRay(kray, hsurf, hattr); 
             double yyy = RT13.dGetRay(kray, vsurf, vattr); 
-            addScaled(xxx, yyy, 0., iSymbol+icolor, QBASE);    
-            if ((jOtherSurface > 0) && (hsurf == vsurf))
+            if (U.isNotNegZero(xxx) && U.isNotNegZero(yyy))
             {
-               xxx = RT13.dGetRay(kray, jOtherSurface, hattr); 
-               yyy = RT13.dGetRay(kray, jOtherSurface, vattr); 
-               icolor = blackbkg ? WHITE : BLACK;
-               addScaled(xxx, yyy, 0., iSymbol+icolor, QBASE);  
+                if (DEBUG)
+                   System.out.printf("Plot2Panel is adding one point at xxx, yyy = %8.4f %8.4f \n", xxx, yyy); 
+                addScaled(xxx, yyy, 0., iSymbol+iColor, base);    
+                return true; 
             }
-            return true; 
         }
         return false; 
     } 
-    
-    
-    boolean drawOneRandomRay()
-    // Relies upon iSymbol, jOtherSurface, hsurf, ..setup as part of doArt().
-    // Success criterion depends on: do we want to require jFinal for all rays?
-    // or just plot rays that get as far as our plot surface?
-    {
-        int jmin = ngroups;
-        if(DMF.reg.getuo(UO_PLOT2, 10).equals("T")) // plot all rays?
-          jmin = U.imax3(hsurf, vsurf, jOtherSurface); 
+}  //----------end of public class------------------    
 
-        // jmin now encapsulates our complete success criterion
-
-        boolean bStatus;
-
-        RT13.bRunRandomRay();   // run one random ray.
-        bStatus = (RT13.getHowfarRay(0) >= jmin);
-
-        if (bStatus)
-        {
-            int kGuide = RT13.getGuideRay(); 
-            int kkk = kGuide;
-            int icolor = (int) RT13.raystarts[kkk][RSCOLOR]; 
-            if (blackbkg && (icolor==BLACK))
-              icolor = WHITE; 
-
-            double xxx = RT13.dGetRay(0, hsurf, hattr); 
-            double yyy = RT13.dGetRay(0, vsurf, vattr); 
-            addScaled(xxx, yyy, 0., iSymbol+icolor, QBATCH);  
-            if ((jOtherSurface > 0) && (hsurf == vsurf))
-            {
-               xxx = RT13.dGetRay(0, jOtherSurface, hattr); 
-               yyy = RT13.dGetRay(0, jOtherSurface, vattr); 
-               icolor = blackbkg ? WHITE : BLACK;
-               addScaled(xxx, yyy, 0., iSymbol+icolor, QBATCH);  
-            }
-            return true; 
-        }
-        return false; 
-    } 
-
-
-    private int getOther(int ngroups) 
-    {
-        int myOther = 0; 
-        String sOther = DMF.reg.getuo(UO_PLOT2, 11);
-        char cOther = U.getCharAt(sOther, 0); 
-        if ((cOther == 'f') || (cOther == 'F'))  // final surface
-          myOther = ngroups;
-        else
-          myOther = U.suckInt(sOther);
-        if ((myOther < 1) || (myOther > ngroups))
-          myOther = 0; 
-        return myOther;
-    }
-}

@@ -4,7 +4,8 @@ import java.util.*;        // ArrayList
 import javax.swing.*;      // JOptionPane dialog
 
 /** InOut.java
-  *
+  *  A207 eliminates groups: Dec 2018
+  *  A207 blanks fields that are negative zero: see EJIF line 680
   *  Rev A34 uses RT13.dGetRay() for entire ray trace:
   *  Rev 112 accommodates groups of surfaces.
   *  Runs a complete ray trace and posts results to the ray table. 
@@ -20,7 +21,7 @@ class InOut implements B4constants
 {
     private OEJIF optEditor = null; 
     private REJIF rayEditor = null; 
-    private int nsurfs=0, ngroups=0, nfields=0, nrays=0, onfields=0, rnfields=0;
+    private int nsurfs=0, nfields=0, nrays=0, onfields=0, rnfields=0;
     private int ngood=0, ngoals=0;
 
 
@@ -73,14 +74,13 @@ class InOut implements B4constants
         optEditor = DMF.oejif;
         rayEditor = DMF.rejif;
         nsurfs = DMF.giFlags[ONSURFS]; 
-        ngroups = DMF.giFlags[ONGROUPS]; 
         onfields = DMF.giFlags[ONFIELDS];  // fields per optic.
         nrays = DMF.giFlags[RNRAYS]; 
         rnfields = DMF.giFlags[RNFIELDS];  // fields per ray.
         ngoals = DMF.giFlags[RNGOALS]; 
         if ((optEditor==null) || (rayEditor==null))
           return false; // SNH graying.
-        if ((ngroups<1) || (onfields<1) || (nrays<1) || (rnfields<1))
+        if ((onfields<1) || (nrays<1) || (rnfields<1))
           return false; // SNH graying. 
         return true; 
     }
@@ -91,36 +91,46 @@ class InOut implements B4constants
     // Assumed globals: nrays, nfields, ngoals, rayEditor.
     // Run iSetup(), then RT13.iBuildRays(), prior to calling this. 
     {
-        ngroups = DMF.giFlags[ONGROUPS];      // safety
         for (int kray=1; kray<=nrays; kray++) // ray loop
         { 
+            if (DEBUG)
+               System.out.println("InOut.vUpdateRayTable starting with kray = "+kray);
             int row = kray+2; 
-            int howfarRay = RT13.getHowfarRay(kray);
-            int howfarLoop = RT13.getHowfarLoop(kray); 
-            
+            int howfarOK = RT13.getHowfarOK(kray);     // unneeded here.
+            int howfarLoop = RT13.getHowfarLoop(kray);  // does everything: OK and Fail
+            if (DEBUG)
+               System.out.println("InOut.vUpdateRayTable has howfarOK, howfarLoop = "+howfarOK+"  "+howfarLoop);  
             for (int f=0; f<rnfields; f++)    // field loop
             {
                 int op = REJIF.rF2I[f]; 
                 if (op == RNOTE)  // ray note message here....
                 {
-                    String s = " "+sResults[RT13.getStatus(kray)] + U.fwi(howfarLoop,2);
+                    int stat = RT13.getStatus(kray); 
+                    String s = " "+sResults[stat] + U.fwi(howfarLoop,2);
+                    if (DEBUG)
+                       System.out.println("InOut.vUpdateRayTable RNOTE: stat, str = "+stat+"  "+s);         
                     rayEditor.putField(f, row, s); 
                 }
                 else
-                if (op == RDEBUG) // debugger message here....
-                  rayEditor.putField(f, row, RT13.bGoodRay[kray] ? "OK" : "NG"); 
+                   if (op == RDEBUG) // debugger message here....
+                     rayEditor.putField(f, row, RT13.isRayOK[kray] ? "OK" : "NG"); 
                 else
-                if (op >= RGOAL) // Comparo handles floating goals update
-                  continue; 
+                   if (op >= RGOAL) // Comparo handles floating goals update
+                     continue; 
                 else
-                if (op >= 100)   // output table data are wanted here...
-                {
-                    rayEditor.putBlank(f, row); 
-                    int g = RT13.getGroupNum(op); // handles "final"
-                    int ia = RT13.getAttrNum(op); 
-                    if ((ia>=0) && (ia<RNATTRIBS) && (g>0) && (g<=howfarRay))
-                      rayEditor.putFieldDouble(f, row, RT13.dGetRay(kray,g,ia));  
-                }
+                  if (op >= 100)   // output table results are wanted here...
+                  {
+                      rayEditor.putBlank(f, row); 
+                      int j = RT13.getSurfNum(op); // handles "final"
+                      int ia = RT13.getAttrNum(op); 
+
+                      if ((ia>=0) && (ia<RNATTRIBS) && (j>0) && (j<=howfarOK))
+                      {
+                        double x = RT13.dGetRay(kray,j,ia); 
+                        if (U.isNotNegZero(x))
+                           rayEditor.putFieldDouble(f, row, RT13.dGetRay(kray,j,ia));  // in EJIF
+                      }
+                  }
             } // done with writing all fields for this ray. 
         } // done with all rays. 
 

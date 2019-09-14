@@ -3,8 +3,23 @@ package com.stellarsoftware.beam;
 import java.text.DecimalFormat; // for debugging only
 
 /** This file contains public class RT13 and private class MinFit
+  *  A207: eliminating groups, using 5x4 ray/surf logic.
+  *  A207.11 implementing TASK DIAGRAM in DevelopmentNotes.txt
+  *  ..including distinguishing getHowfarOK vs getHowfarLoop(), getFailSurf and getFailCode.
+  *  
+  *  A206 Converting mirrors to bimodal: never kill rays but update rayseq[][].
+  *  Rod Andrew finds one crazy ray  "StrayRay.OPT" being explored here. 
+  *  It is at line 419 that mirrors escape failure.  NOPE somewhere else.
   *
-  *
+  *  A205 Implementing intercept failure surface "iFailSurf" and "iFailCode"
+  *  A201 Yikes needs an error message * sxplanation for line 206...
+  *       if (Double.isNaN(wavel))
+  *           return RRUNK;
+  *  that explains need NUMERICAL wavelengths not letter codes. 
+  *  A200: improved smartUVW() fixup not yet installed. 
+  *  A198: meat-ax fixup for RU, RV, RW installed; line 1065
+  *  A195, A196: uniform top hat scatter added for Rod Andrew.
+  *  A192, A193, A194: curl free VLS installed for Hettrick.
   *  A188, 189: adopted class Triple for refraction, diffraction
   *  A186 Sep 2015: eliminated final refraction into vacuum in getRefraction()
   *  A169 March 2015: Added RTANGLE each intercept ray dot normal, in iRedirect.
@@ -96,18 +111,18 @@ import java.text.DecimalFormat; // for debugging only
   * rev A34: nstalled analytic differentiator for all surfaces;
   * this will need exhaustive testing, including "farside" intercepts. 
   *
-  * Relies upon Z.vGetZsurf() for the surface model beyond conics & cylinders.
-  * Relies upon Z.vGetPerp() for all gradients. 
+  * Relies upon Z.vGetZsurf() for the surface model beyond conics & cylinders: numerical solvers.
+  * Relies upon Z.vGetNormal() for surface gradients and conversion to normal vector. 
   *
-  * Parameter "howfar" is how far the loop went, ray=OK or not.
-  * HowFarGood = RROK ? howfar : howfar-1.
-  * Reason:  In "Message NN" the NN = howfar, and message is OK or fail.
-  * 
+  * Local int  "howfarLoop" is how far the loop went, ray=OK or not.
+  * Local int "howfarOK" is how far there was an RROK.
+  * Reason:  In "Message NN" the NN = howfarLoop, and message is OK or fail.
+  * And: in Layout, Plot2D, Plot3 need howfarOK to validate each ray point {xyz}.
   * 
   * Method initRaySeq() is private, no client interfaces;
   * Calling initRaySeq() within bRunray() case (krand==1) setup. 
   *
-  * public output methods: getStatus(), getHowfar(), getExtend().
+  * public output methods: getStatus(), getHowfarOK(), getHowfarLoop(), getExtend().
   *
   *
   * setTableDirection()    handles RayTable & DefaultRay choices
@@ -132,8 +147,9 @@ import java.text.DecimalFormat; // for debugging only
   *      surfs[][]          << filled by OEJIF; modified by Map,MPlot..
   *      raystarts[][]      << filled by REJIF; modified by AutoRay
   *      iWFEgroup[]        << filled by REJIF
-  *      spans[]            << filled by REJIF after WFEgroup
-  *      smins[]            << filled by REJIF after WFEgroup
+  *      spans[]            << filled by REJIF
+  *      smins[]            << filled by REJIF
+  *      smaxs[]            << filled by REJIF
   *      media[][]          << filled by MEJIF
   *
   *----output array-------------- 
@@ -151,7 +167,7 @@ import java.text.DecimalFormat; // for debugging only
   *   Client then must run iBuildRays()
   *
   *   Client can ask for any resulting datum for any ray:
-  *       int getHowfar(), int getStatus(), double dGetRay(k, g, attrib).
+  *       int getHowfarOK(), int getStatus(), double dGetRay(k, j, attrib).
   *   runseq[][] is dwells within this class.
   *
   * Internally, VxtoLab etc all act on a 13-element ray not 6-element ray.
@@ -163,60 +179,75 @@ import java.text.DecimalFormat; // for debugging only
   */
 class RT13 implements B4constants
 {
+    private static int iFailSurf, iFailCode; // for AutoAdjust line 298
+    
     /*--------public input working arrays for OEJIF and REJIF------*/
+    /*-------RNSTARTS = 10, the number of ray start attributes-----*/
 
     public static double  surfs[][]      = new double[MAXSURFS+1][ONPARMS]; 
     public static double  raystarts[][]  = new double[MAXRAYS+1][RNSTARTS]; 
-    public static double  spans[][]      = new double[MAXWFEGROUPS][RNSTARTS];
-    public static double  smins[][]      = new double[MAXWFEGROUPS][RNSTARTS];
+    public static double  spans[]        = new double[RNSTARTS];  // set by REJIF
+    public static double  smins[]        = new double[RNSTARTS];  // set by REJIF
+    public static double  smaxs[]        = new double[RNSTARTS];  // set by REJIF
     public static double  media[][]      = new double[MAXMEDIA+1][MAXFIELDS]; 
 
-    public static int     gO2M[] = new int[MAXSURFS+1]; // from DMF
-    public static int     gR2M[] = new int[MAXRAYS+1];  // from DMF
+    public static int     gO2M[] = new int[MAXSURFS+1]; // from DMF; for jsurf gives glass ID
+    public static int     gR2W[] = new int[MAXRAYS+1];  // from DMF; for kray gives wavel ID
 
     //----gwave allows MPlotPanel to commandeer wavelengths; see getRefraction()---
     //------for all other purposes keep gwave=0 so rays control wavelengths--------
 
     public static int     gwave = 0;   
  
-    /*----------Groups of surfaces, all filled in by OEJIF-------*/
-    /*----- but of course j[g] is ray dependent.-----------------*/
-
-    public static int jstart[] = new int[MAXGROUPS+1];  // group to surface
-    public static int jstop[]  = new int[MAXGROUPS+1];  // group to surface
-    public static int group[]  = new int[MAXSURFS+1];   // surface to group
-
     /*----------------public output arrays-------------------*/
 
 
     public static double  refractLayoutShading[] = new double[MAXSURFS+1]; 
-    public static boolean bGoodRay[] = new boolean[MAXRAYS+1]; 
-    public static int     iWFEgroup[] = new int[MAXRAYS+1];    // input from REJIF
+    public static boolean isRayOK[] = new boolean[MAXRAYS+1]; 
+    // public static int     iWFEgroup[] = new int[MAXRAYS+1];  // eliminated A207
     // public static double     dot[] = new double[MAXRAYS+1];  // moved into attribs
     
 
     /*------------------------------------------------------*/
     /*-------------------- public methods-------------------*/
     /*------------------------------------------------------*/
-
-    static public double dGetRay(int kray, int g, int iattrib)
-    // Accesses any one ray trace result, after iBuildRays() has been run.
-    // "g" is the desired group number.
+    
+    public static int getFailSurf()  // set in line 664; called by AutoAdjust line 297.
     {
+        return iFailSurf;
+    }
+    
+    public static int getFailCode()  // set in line 665; called by AutoAdjust line 297.
+    {
+        return iFailCode;
+    }
+
+    static public double dGetRay(int kray, int j, int iattrib)
+    // Accesses any one ray trace result, after iBuildRays() has been run.
+    // "j" is the desired surface number.
+    {
+        if (j<0)
+            System.out.println("RT13.dGetRay() HAS BEEN ASKED ABOUT NEGATIVE SURFACE = "+j);
         if ((iattrib >= RX) && (iattrib < RTWFE))  // now includes RTDOT
         {
-            double x = dRays[kray][g][iattrib];
+            double x = dRays[kray][j][iattrib];
             return x; 
         }
-        if (iattrib == RTWFE)
-          return dWFE[kray]; //--why use a special array for WFE?
+        // if (iattrib == RTWFE)
+        //   return dWFE[kray]; //--why use a special array for WFE?
         return -0.0; 
     }
 
-
-    static public double dGetSurf(int iatt, int jsurf)
+    static public double dGetRayFinal(int kray, int iatt)
+    // called by MapPanel after iBuildRays() has been run.
+    {
+        int jsurf = DMF.giFlags[ONSURFS]; 
+        return dRays[kray][jsurf][iatt]; 
+    }
+    
+    
+    static public double dGetSurfParm(int iatt, int jsurf)
     // Returns one of the many surface parameters & attributes. 
-    // DO NOT USE THIS WITH GROUPS -- defined results only when ungrouped.
     // Needed for Map function when surface is to be deviated for mapping.
     // Called by MapPanel and LayoutPanel. 
     {
@@ -227,314 +258,25 @@ class RT13 implements B4constants
          return surfs[jsurf][iatt]; 
     }
 
-
-
-    static public double dGetRayFinal(int kray, int iatt)
-    // called by MapPanel after iBuildRays() has been run.
-    // Averages over all groups. 
-    {
-        int jsurf = DMF.giFlags[ONSURFS]; 
-        return dRays[kray][jsurf][iatt]; 
-    }
-    
-
-    
-    static public int iBuildRays(boolean bAll)
-    // This runs all (or nearly all) table rays. 
-    // NOTA BENE this is nsurfs not ngroups!  Because it uses bRunOneRay.
-    // Builds dRays[] by calling bRunray() for each ray start.
-    //  (bRunray() uses iInitRaySeq() to set up each ray, even random rays.)
-    // Builds dWFE[] from aggregate dRays[].
-    // If bAll=true, it tries all rays and writes bGoodRay[].
-    // If bAll=false, it assumes bGoodRay[] is correct and runs only known good rays.
-    // This is a laborsaver, used in Auto.  Check for freshly failed rays!
-    // In either case it returns the number of good rays. 
-    //
-    // Be sure RT13.gwave=0 except for MPlotPanel external wavelength command. 
-    // RT13.gwave is a key control parm for RT13.getRafraction(). 
-    //
-    // M.Lampton STELLAR SOFTWARE (C) 2007
-    {
-        int gnrays = DMF.giFlags[RNRAYS]; 
-        int gnsurfs = DMF.giFlags[ONSURFS]; 
-        int gngroups = DMF.giFlags[ONGROUPS]; 
-
-        if ((gnrays < 1) || (gnrays > MAXRAYS))
-          return 0; // SNH thanks to graying.
-        if ((gnsurfs < 1) || (gnsurfs > MAXSURFS))
-          return 0; // SNH thanks to graying.
-
-        for (int k=0; k<=gnrays; k++)
-          for (int grp=0; grp<=gngroups; grp++)
-            for (int iatt=0; iatt<RNATTRIBS; iatt++)
-              dRays[k][grp][iatt] = -0.0; 
-
-        ngood = 0; 
-
-        for (int k=1; k<=gnrays; k++)
-          if (bAll || bGoodRay[k])
-          {
-              boolean bOK = bRunOneRay(k);  // copy to dRays[][][] from each rayseq[][].
-              if (bOK)
-                ngood++; 
-              if (bAll)
-                bGoodRay[k] = bOK;
-              for (int grp=0; grp<=howfar[k]; grp++)
-                for (int iatt=0; iatt<RNATTRIBS; iatt++)
-                  dRays[k][grp][iatt] = rayseq[grp][iatt];  // also in bRunOneRay() ???
-          }
-
-        doWFEtask(ngood, gnrays, gngroups); 
-        return ngood; 
-    } //---end of iBuildRays()------
-
-
-
-    static public boolean bRunOneRay(int kray) 
-    // Runs a single ray. If kray==0, random ray; else table ray.
-    // Outputs to runray[g][attrib] and   jfound[kray][group].
-    // Returns TRUE if raystatus == RROK, else FALSE.
-    // M.Lampton STELLAR SOFTWARE (c) 2012. 
-    {
-        int nsurfs = DMF.giFlags[ONSURFS]; 
-        int ngroups = DMF.giFlags[ONGROUPS]; 
-        int prevstatus = RROK; 
-        boolean propagated = false; 
-
-        stat[kray] = RROK;       // positive index to ray failure message
-        int prev = RROK;         // shorthand raystatus for previous surface
-        howfar[kray] = 0;        // progress indicator
-        bExtend[kray] = false;
-        kGuideRay = iInitRaySeq(kray, nsurfs);           // SETUP group zero ????
-        jfound[kray][0] = 0; 
-        
-        for (int g=1; g<=ngroups; g++)                   // group loop
-        {
-            propagated = false;                          // no propagation yet
-            howfar[kray] = g;                            // trying group "g"
-            int j = getBestSurf(g);                      // finds first surface within g
-            if ((j<g) || (j>nsurfs))                     // group failure (singles are OK here)
-            {  
-                stat[kray] = RRGRP;  
-                break; 
-            }
-
-            jfound[kray][g] = j; 
-            labtovx(rayseq[g-1], rayseq[g], surfs[j]);
-
-            boolean bFront   = (OTBLFRONT==surfs[j][OTYPE]) && (OTBLBACK==surfs[j+1][OTYPE]);
-            boolean bBack    = (OTBLFRONT==surfs[j-1][OTYPE]) && (OTBLBACK==surfs[j][OTYPE]);
-            boolean bBimodal = bFront || bBack; 
-
-            double d = dIntercept(rayseq[g], surfs[j]);
-            if (d<0.0)                                   // intercept failure: bak, mis, Dia, ...
-            {
-                stat[kray] = (int) (-d);                 // miss or backward
-                d = 0.0; 
-                if (!bBimodal)
-                {
-                    vExtend(rayseq[g]);                  // short dotted extension
-                    bExtend[kray] = true; 
-                }
-                else  // bimodal situation: relabel, no reversing needed
-                {
-                    if (stat[kray]==RRDIA)
-                      stat[kray] = RRBO;
-                    if (stat[kray]==RRdia)
-                      stat[kray] = RRBI;
-                    propagated = false;   // these did not use propagation
-                }
-            }
-
-            if ((stat[kray]==RROK) || (bBack && bFrontOK(prev)))
-            {
-                double dIndex = getRefraction(g, kray); 
-                vPropagate(rayseq[g], d, dIndex, surfs[j]);
-                propagated = true; 
-                stat[kray] = iDiams(rayseq[g], surfs[j]);  
-                if (bBimodal && (stat[kray]==RRdia))
-                  stat[kray] = RRBI; 
-                if (bBimodal && (stat[kray]==RRDIA))
-                  stat[kray] = RRBO;
-            }
-
-            if (propagated && ((stat[kray]==RRBI) || (stat[kray]==RRBO)))  // reverse
-            {
-                double dIndex = getRefraction(g, kray); 
-                vPropagate(rayseq[g], -d, dIndex, surfs[j]);
-            }
-
-            if (stat[kray]==RROK)          
-              stat[kray] = iRedirect(rayseq, surfs[j], j, g);   // TIR, whatever.
-
-            vxtolab(rayseq[g], surfs[j]);  // update all coordinates; no more motions. 
-
-            if (bBack)                     // approve inside and outside bypass but not TIR etc
-            {
-                if (bBypass(prev, stat[kray]))
-                  stat[kray] = RROK; 
-                else
-                  stat[kray] = Math.max(prev, stat[kray]); // pick worse
-            }
-
-            prev = stat[kray]; 
-
-            boolean bLoop = (stat[kray]==RROK) || (bFront && bFrontOK(stat[kray])); 
-            if (!bLoop)     // bail out of surface loop
-              break; 
-        }
-
-        if (RROK==stat[kray])  // update the ray table; but also in iBuildRays() ???
-        {
-            for (int g=0; g<=howfar[kray]; g++)
-              for (int iatt=0; iatt<RNATTRIBS; iatt++)
-                dRays[kray][g][iatt] = rayseq[g][iatt];
-        }
-
-        return (RROK==stat[kray]);   // return success or failure
-
-    } //--------end of bRunOneRay()-----------------------
-
-
-
-    private static boolean bBypass(int prev, int stat)
-    //  Evaluates bypass=OK exit logic for bimodal lenses
-    //  Bimodal lenses allow some specific joint ray failures.
-    {
-        if ((prev==RROK) && (stat==RROK))
-          return true; 
-        if ((prev==RRMIS) && ((stat==RRMIS) || (stat==RRBAK) || (stat==RRBO)))
-          return true; 
-        if ((prev==RRBAK) && ((stat==RRMIS) || (stat==RRBAK) || (stat==RRBO) || (stat==RRBI)))
-          return true; 
-        if ((prev==RRBI) && ((stat==RRMIS) || (stat==RRBAK) || (stat==RRBI)))
-          return true; 
-        if ((prev==RRBO) && ((stat==RRMIS) || (stat==RRBAK) || (stat==RRBO)))
-          return true; 
-        return false;
-    }
-
-    private static boolean bFrontOK(int stat)
-    // provides loop permission for bimodal-front ray fail situations
-    {
-        switch(stat)
-        {
-            case  RROK:
-            case  RRMIS:
-            case  RRBAK:
-            case  RRBI:
-            case  RRBO: return true;
-        }
-        return false; 
-    }
-
-    private static int getBestSurf(int g)
-    // For a one-surface group, returns that surface;
-    // For a bigger group, returns the best surface, or -1 if none are OK.
-    // This only names the best surface, does NOT propagate the winner. 
-    {
-        if (jstop[g] == jstart[g])
-          return jstart[g]; 
-
-        int iTrial[] = new int[MAXSURFS]; 
-        double dTrial[] = new double[MAXSURFS];    
-        for (int j=jstart[g]; j<=jstop[g]; j++)
-        {
-            labtovx(rayseq[g-1], rayseq[g], surfs[j]); 
-            dTrial[j] = dIntercept(rayseq[g], surfs[j]);
-            iTrial[j] = (dTrial[j]>=0.0) ? RROK : (int) (-dTrial[j]);
-            if (iTrial[j]==RROK)
-            {
-                vPropagate(rayseq[g], dTrial[j], 1.0, surfs[j]);
-                iTrial[j] = iDiams(rayseq[g], surfs[j]);    
-                vPropagate(rayseq[g], -dTrial[j], 1.0, surfs[j]);
-            }
-        }
-        int jBest = -1;   // absentee code
-        double dBest = BIGVAL; 
-        for (int j=jstart[g]; j<=jstop[g]; j++)
-          if ((dTrial[j]>TOL) && (dTrial[j]<dBest) && (iTrial[j]==RROK))
-          {
-              dBest = dTrial[j];
-              jBest = j;
-          }
-
-        return jBest; 
-    }
-
-
-
-
-
-    
-
-
-
-
-
-    static public boolean bRunRandomRay()
-    // This runs bRunray() whose iInitRaySeq() does the randomization.
-    // Of course assumes that raystarts[] is current and correct!
-    // Then this does all the WFE correction stuff. 
-    // Assumes that doWFEtask() has been run, thereby building 
-    // group arrays sWFE[], eWFE[], ijWFE[][], and tiltWFE[][].
-    // But yikes! a random ray won't have any "group" identity since
-    // it could have been randomed to any intermediate field point.
-    // Ergo, no way to apply WFE correction to a random ray
-    // except via start & end tilts.  May as well use kGuideRay???
-    {
-        int gnsurfs = DMF.giFlags[ONSURFS]; 
-        int gngroups = DMF.giFlags[ONGROUPS]; 
-        boolean bStatus = bRunOneRay(0); // includes iInitRaySeq()
-
-        for (int jsurf=0; jsurf<=howfar[0]; jsurf++)
-          for (int iatt=0; iatt<RNATTRIBS; iatt++)
-            dRays[0][jsurf][iatt] = rayseq[jsurf][iatt]; 
-
-        if (bStatus)          //---update WFE information------
-        {
-            int ig = iWFEgroup[kGuideRay];
-            double dsk, dek; 
-            dsk = (dRays[0][0][RX] - sWFE[ig][RX]) * dRays[0][0][RU]
-                + (dRays[0][0][RY] - sWFE[ig][RY]) * dRays[0][0][RV]
-                + (dRays[0][0][RZ] - sWFE[ig][RZ]) * dRays[0][0][RW];
-
-            dek = (dRays[0][gnsurfs][RX] - eWFE[ig][RX]) * dRays[0][gnsurfs][RU]
-                + (dRays[0][gnsurfs][RY] - eWFE[ig][RY]) * dRays[0][gnsurfs][RV]
-                + (dRays[0][gnsurfs][RZ] - eWFE[ig][RZ]) * dRays[0][gnsurfs][RW];
-
-            dWFE[0] = dRays[0][gnsurfs][RPATH] + dsk - dek - avgWFE[ig];
-
-            //-------apply the tilt correction------------
-
-            int jx = ijWFE[ig][0]; 
-            int jy = ijWFE[ig][1]; 
-            dWFE[0] -= tiltWFE[ig][0]
-                     + tiltWFE[ig][1]*dRays[0][gnsurfs][jx]
-                     + tiltWFE[ig][2]*dRays[0][gnsurfs][jy];
-        }
-        return bStatus; 
-    }
-
-
-    static public int getGroupNum(int opcode)
-    // Converts a given opcode into its group number.
-    // This handles the case of "final" by returning ngroups. 
+    static public int getSurfNum(int opcode)
+    // Converts a given opcode into its surface number.
+    // This handles the case of "final" by returning nsurfs. 
     // Callers should always test this result for error situation = -1!
     { 
-        int ngroups = DMF.giFlags[ONGROUPS]; 
+        int nsurfs = DMF.giFlags[ONSURFS]; 
         if (opcode < 0)
           return -1; 
         int attr = opcode % 100;
         if (attr > 20)  // eliminate RNOTE, RBUG...
           return -1; 
-        int group = opcode/100; 
-        if (group == RFINAL/100)  // handles "final"  
-          return ngroups; 
-        if (group > ngroups)
+        int surf = opcode/100; 
+        if (surf == RFINAL/100)  // handles "final"  
+          return nsurfs; 
+        if (surf > nsurfs)
           return -1; 
-        return group; 
+        return surf; 
     }
+    
     
     static public int getAttrNum(int opcode)
     // Always test result for situation = -1!
@@ -549,24 +291,26 @@ class RT13 implements B4constants
 
     static public int getStatus(int kray)
     // Returns RROK or ray error code for "kray"
+    // Decode these with B4constants sResults[] array. 
     {
-        return stat[kray]; 
+        return status[kray]; 
     }
 
 
     static public int getHowfarLoop(int kray)
     // Returns how far the *loop* went, 1...ngroups
-    // even though the ray may have Diametered out.
+    // even though the ray may have failed or terminated OK.
     // Use this in InOut's explanations. 
     {
-        return howfar[kray]; 
+        return howfarLoop[kray]; 
     } 
 
-    static public int getHowfarRay(int kray)
-    // Returns how far the *ray* went, 0....ngroups
+
+    static public int getHowfarOK(int kray)
+    // Returns how far the *ray* went, 0....nsurfs
+    // Used by Layout for jsolid, and Plot2D Plot3D for item validation
     {
-        int ngroups = DMF.giFlags[ONGROUPS]; 
-        return (stat[kray] == RROK) ? ngroups : howfar[kray]-1; 
+        return howfarOK[kray]; 
     } 
    
 
@@ -579,9 +323,13 @@ class RT13 implements B4constants
         return bExtend[kray];
     }
 
+
     static public int getGuideRay()
     // Returns the number 1...nrays of ray whose color, wavel, order is in use.
     // Most useful for random rays, where kray=0. 
+    // Yikes in A207 this is always zero!  Must never be zero!
+    // Modifying it to return a random integer 1...Nrays
+    // MUST NEVER RETURN ZERO.
     {
         return kGuideRay;
     }
@@ -589,7 +337,8 @@ class RT13 implements B4constants
 
     static public double getRefraction(int jsurf, int gkray)
     // if gwave==0: Returns index approaching jsurf, using gkray @wave.
-    // if gwave>0: returns intex approaching jsurf, using media @gwave.
+    // if gwave>0: returns index approaching jsurf, using media @gwave.
+    // Mostly called by public iBuildRays()
     // Called by LayoutPanel for shading with gkray=1. 
     // Called by redirectors, below, for Snell's law and optical path.
     // gO2M[] is evaluated in DMF when parsing is complete
@@ -597,6 +346,7 @@ class RT13 implements B4constants
     {
         // First: try to get refr from surfs[][] set by OEJIF.
         // If OK, use it; else use media LUT. 
+        // System.out.println("-------RT13.getRefraction is starting with jsurf, gkray = "+jsurf+"  "+gkray);
         int nsurfs = DMF.giFlags[ONSURFS]; 
         if (jsurf<1)
           return 1.0;        // error condition
@@ -605,32 +355,59 @@ class RT13 implements B4constants
         double refr = surfs[jsurf][OREFRACT]; 
         if (Double.isNaN(refr))
         {
-            int k = (gkray==0) ? getGuideRay() : gkray; 
+            // System.out.println("RT13.getRefraction finds NAN at jsurf, kray = "+jsurf+"  "+gkray); 
+            int k = gkray; 
+            if (gkray==0)
+            {
+                k = getGuideRay();
+                // System.out.println("RT13.getRefraction is trying GuideRay = "+k);
+            }
+            
+            // int k = (gkray==0) ? getGuideRay() : gkray; 
             if (k<1)
-              return 1.0;    // error condition; 
+            {
+                // System.out.println("RT13.getRefraction has a null ray; error, exitting.");
+                return 1.0;    // error condition; 
+            }
             int iglass = gO2M[jsurf]; 
+            // System.out.println("RT13.getRefraction finds iglass = "+iglass); 
             if (iglass<1)
               return 1.0;    // error condition
-            int iwave = gR2M[k]; 
+            int iwave = gR2W[k]; 
+            // System.out.println("RT13.getRefraction finds iwave = "+iwave); 
             if (gwave>0)     // global mandate to use given iwave: MPlotPanel
-              iwave = gwave; 
+            {
+                // System.out.println("RT13.getRefraction finds positive gwave = "+gwave); 
+                iwave = gwave; 
+            }
             if (iwave<1)
-              return 1.0;    // error condition
-            return media[iglass][iwave]; 
+            {
+                // System.out.println("RT13.getRefraction finds iwave < 1: error, exitting."); 
+                return 1.0;    // error condition
+            }
+            double n = media[iglass][iwave]; // media[][] was filled in by MEJIF line 100
+            // System.out.printf("RT13.getRefraction using media[][], gets n = %8.4f\n", n); 
+            return n; 
         }
+        // System.out.printf("RT13.getRefraction using surfs: n = %8.4f \n", refr);
         if (refr == 0.0)
-          refr = 1.0; 
+        {   
+            // System.out.println("RT13.getRefraction finds zero! returning 1.0 and exitting."); 
+            refr = 1.0; 
+        }
         return refr;
     }
 
 
     static public void setEulers()
+    // fixes up all missing fields in optical surface definition
     // Generate matrix converting local to lab frame. 
     // Use transpose to convert lab frame to local. 
     // Sequence is tilt(x), pitch(y'), roll(z").
     // Called by Auto.dNudge(), OEJIF.parse(), MPlot. 
     // Used by RT13:: labtovx() and vxtolab()().
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
+    // Enlarged to include six Hettrick implicit groove parameters, A192 March 2016
     {
        double ct, st, cp, sp, cr, sr; 
        for (int j=1; j<=DMF.giFlags[ONSURFS]; j++)
@@ -651,6 +428,300 @@ class RT13 implements B4constants
            surfs[j][OE32] = sr*sp*ct + cr*st;    // Z <- y; M32
            surfs[j][OE33] = cp*ct;               // Z <- z; M33
        }
+       
+       //---Hettrick implicit polynomial coefficients  A192; A193---------
+       for (int j=1; j<DMF.giFlags[ONSURFS]; j++)
+       {
+           // surfs[j][OVX01] = surfs[j][OVY10]; 
+           // surfs[j][OVX02] = surfs[j][OVY11]/2.0;
+           // surfs[j][OVX03] = surfs[j][OVY12]/3.0; 
+           // surfs[j][OVX11] = surfs[j][OVY20]*2.0; 
+           // surfs[j][OVX12] = surfs[j][OVY21]; 
+           // surfs[j][OVX21] = surfs[j][OVY30]*3.0; 
+           
+           surfs[j][OVX01] = surfs[j][OVY10]; 
+           surfs[j][OVX02] = surfs[j][OVY11]/2.0;
+           surfs[j][OVX03] = surfs[j][OVY12]/3.0; 
+           surfs[j][OVX04] = surfs[j][OVY13]/4.0;
+           surfs[j][OVX11] = surfs[j][OVY20]*2.0; 
+           surfs[j][OVX12] = surfs[j][OVY21]; 
+           surfs[j][OVX13] = surfs[j][OVY22]*2.0/3.0;
+           surfs[j][OVX21] = surfs[j][OVY30]*3.0; 
+           surfs[j][OVX22] = surfs[j][OVY31]*3.0/2.0;
+           surfs[j][OVX31] = surfs[j][OVY40]*4.0;
+        }
+    }
+
+
+  
+    static public int iBuildRays(boolean bAll)
+    // This runs all table rays or just the previously good table rays. 
+    // NOTA BENE this is nsurfs not ngroups!  Because it uses bRunOneRay.
+    // Builds dRays[] by calling bRunray() for each ray start.
+    //  (bRunray() uses iInitRaySeq() to set up each ray, even random rays.)
+    // Builds dWFE[] from aggregate dRays[].
+    // If bAll=true, it tries all rays and writes isRayOK[].
+    // If bAll=false, it assumes isRayOK[] is correct and runs only known good rays.
+    // This is a laborsaver, used in Auto.  Check for freshly failed rays!
+    // In either case it returns the number of good rays. 
+    //
+    // Be sure RT13.gwave=0 except for MPlotPanel external wavelength command. 
+    // RT13.gwave is a key control parm for RT13.getRafraction(). 
+    //
+    // M.Lampton STELLAR SOFTWARE (C) 2007
+    {
+        int gnrays = DMF.giFlags[RNRAYS]; 
+        int gnsurfs = DMF.giFlags[ONSURFS]; 
+        // System.out.println("Starting RT13.iBuildRays()");
+
+        for (int k=0; k<=gnrays; k++)
+           for (int j=1; j<gnsurfs; j++)
+            for (int iatt=0; iatt<RNATTRIBS; iatt++)
+              dRays[k][j][iatt] = -0.0; 
+
+        ngood = 0; 
+        iFailSurf = 0;
+        iFailCode = 0; 
+        for (int k=1; k<=gnrays; k++)
+        {
+            kGuideRay = k; // ABSOLUTELY CRUCIAL TO USE THIS FOR REFRACTIONS
+            if (bAll || isRayOK[k])
+            {
+                boolean bOK = bRunOneRay(k);
+                if (bOK)
+                  ngood++; 
+                if (bAll)
+                  isRayOK[k] = bOK;
+            }
+        }
+        // doWFEtask(ngood, gnrays, gnsurfs); // temporary elimination
+        return ngood; 
+    } //---end of iBuildRays()------
+
+
+   
+    
+
+    static public boolean bRunOneRay(int k) 
+    // Runs a single ray. If k==0, random ray; else table ray.
+    // Returns TRUE if raystatus == RROK, else FALSE.
+    // M.Lampton STELLAR SOFTWARE (c) 2012, 2018 
+    // Working directly in dRays[kray][j][iatt] not rayseq[j][iatt]
+    // Ray action pattern is from RT158.py; every good intercept propagates.
+    // Must undo this propagation for bimodal failures for DIA,dia,SPI,ORD,TIR...
+    // To undo, don't reverse with distance "d" but instead copy previous {XYZ}
+    //
+    // A207: Random rays are created in four steps by iCreateOneRandomRayStart():
+    //    1. A randomly chosen "guide ray" all attributes are copied into raystarts[0]
+    //    2. {XYZUVW} get randomized from raystart spans, not wavel nor path
+    //    3. {UVW} get fixed up.
+    //    4. The guide ray's index is set here, used by getRefraction()
+    // Q: shouldn't each attrib be separately chosen, to mix them up better?
+    // A: Yes.
+    //
+    // A207: new policy on bExtend:
+    //  * for all intercept failures, set bExtend=true;
+    //  * for OK and all other failures, set bExtend=false.
+    // This way the final word is set by the final ray segment result. 
+    {
+        // System.out.println("RT13.bRunOneRay() starting with k = "+k); 
+        
+        if (k==0)                    // prepare a complete random raystart as kray=0
+        {
+           kGuideRay = iCreateOneRandomRayStart();  // kGuideRay is for getRefraction(), never zero.
+        }
+        
+        int nsurfs = DMF.giFlags[ONSURFS]; 
+        int code = RROK;             // status of this ray, 4 kinds
+        int codex = 0;               // status of this ray, 16 kinds
+        int prevx = 0;               // previous status, 16 kinds.
+        howfarOK[k] = 0;             // progress indicator
+        howfarLoop[k] = 0;           // progress indicator
+        bExtend[k] = false;          // request for graphic extension; otherwise call vxtolabs()
+        boolean kill = false;        // request to kill this ray
+        boolean skip = false;        // request to skip this surface
+
+        for (int iattrib=RX; iattrib<=RPATH; iattrib++)    // copy all seven starts into lab surface zero
+            dRays[k][0][iattrib] = raystarts[k][iattrib];  // What about wavel? Separate wavel list.
+            
+        fixupLabUVW(k); 
+        int jTopHit = 0;              // no RROK's hits yet
+                
+        for (int j=1; j<=nsurfs; j++) // j = target surface loop
+        {
+            if (DEBUG)
+               System.out.println("\n============RT13.bRunOneRay() starting k, j = " + k + "  " + j);
+            code = RROK; 
+            bExtend[k] = false; 
+            kill = false; 
+            skip = false; 
+            labtovx(k, jTopHit, j);    // jTopHit is previous j with RROK
+                             
+            code = intercept(k,j);     // propagates if RROK; else RRMIS, RRBAK. line 1250
+            if (code==RROK)
+                code = validate(k,j);  // RROK else RRDIA, RRdia, RRSPI; line 1600
+            if (code==RROK)
+                code = redirect(k,j);  // RROK else RRORD, RRTIR, RRTER, RRUNK; line 1850
+            if (DEBUG)
+               System.out.println("RT13.bRunOneRay() finds trace code = "+sResults[code]); 
+            
+            // Now index the failure code result 
+            
+            int rrindex = 0;                // default no error    "OK"
+            if ((code==RRMIS) || (code==RRBAK) || (code==RRBRA))
+                rrindex = 1;                // Intercept Fail      "IF"
+            if (code==RRDIA)
+                rrindex = 2;                // Pupil Outer diameter fail "PO"
+            if ((code==RRdia))
+                rrindex = 3;                // Pupil Inside diameter fail "PI"
+            if ((code==RRSPI) || (code==RRORD) || (code==RRTIR) || (code==RRUNK))
+                rrindex = 4;                // Redirection Fail     "RF"
+                
+            if (code==RROK)                 // update jTopHit for this ray
+               jTopHit = j; 
+               
+            // Now index the surface codes
+            
+            int ssindex = 0;                // default unimodal surface
+            if (surfs[j][OTYPE]==OTBMIRROR)
+                ssindex = 1;                // bimodal mirror  
+            if (surfs[j][OTYPE]==OTBLFRONT)
+                ssindex = 2;                  // bimodal lens front
+            if (surfs[j][OTYPE]==OTBLBACK)
+                ssindex = 3;                  // bimodal lens back
+            if (surfs[j][OTYPE]==OTTERMINATE)
+                ssindex = 4; 
+                
+            codex = rrindex + CODEXMULT * ssindex; 
+
+            
+            if (DEBUG)
+            {
+                int iType = (int) surfs[j][OTYPE];
+                String st = sTypes[iType];
+                String sc = sCodex[codex];  
+                System.out.println("RT13.bRunOneRay() has k, j, surftype, rr, ss, codex = "+k+"  "+j+"  "+st+"  "+rrindex+"  "+ssindex+"  "+sc); 
+            }
+            
+            // Now implement the logic in DevelopmentNotes.txt; there are 20 cases. 
+            // Each alternative has one vxtolab() per surface, but if bExtend is set, that is overwritten. 
+            // InterceptFail "IF" cases must not attempt bExtend.
+            // Be sure to explicitly handle every case so as to avoid calling the Police.
+            
+            switch(codex)
+            {
+                case UNIRF:                                                   // count=1
+                case BMRF:                                                    // count=2
+                case BLFRF:                                                   // count=3
+                case BLBRF: {                                                 // count=4
+                             skip = false; 
+                             bExtend[k]=false; 
+                             vxtolab(k,j);
+                             clobberUVW(k,j); 
+                             kill = true;  
+                             break;}                                          // propagated failed rays
+                
+                case UNIOK:                                                   // count=5
+                case BMOK:                                                    // count=6
+                case BLFOK: {howfarOK[k]=j;                                   // count=7
+                             skip = false; 
+                             bExtend[k]=false;
+                             vxtolab(k,j); 
+                             kill = false; 
+                             break;}                                          // good rays
+                
+                case UNIIF:                                                   // count=8
+                case UNIPO:                                                   // count=9
+                case UNIPI: {skip = false;                                    // count=10
+                             bExtend[k]=true; 
+                             clobberUVW(k,j); 
+                             kill=true; 
+                             break;}                                          //  failed; cleaned up
+                                
+                case BMIF:                                                    // count=11
+                case BMPO:                                                    // count=12
+                case BMPI:                                                    // count=13
+                case BTIF:                                                    // count=14
+                case BTPO:                                                    // count=15
+                case BTPI:                                                    // count=16
+                case BTRF:                                                    // count=17
+                       {skip = true; bExtend[k]=true; break;}                 // skip to next 
+                
+                case BLFIF:                                                   // count=18
+                case BLFPO:                                                   // count=19
+                case BLFPI: {skip = true; bExtend[k]=true; break;}            // count=20; wait and see  
+                
+                case BLBOK: if (prevx==BLFOK)                                 // count=21
+                               {howfarOK[k]=j; vxtolab(k,j); break;}          // good ray
+                            else
+                               {vxtolab(k,j);                                 // bad ray
+                                kill=true; 
+                                codex=BLBXO;
+                                code=RRBXO;
+                                bExtend[k]=true; 
+                                break;}        
+                               
+                case BLBIF:                                                   // count=122
+                case BLBPO:                                                   // count=23
+                            if ((prevx==BLFIF) || (prevx==BLFPO))             // bypass OD OK
+                               {skip=true; bExtend[k]=true; break;}
+                             else
+                                {skip=false;                                  // failed bypass OD.
+                                 kill=true; 
+                                 codex=BLBXO;
+                                 code=RRBXO; 
+                                 bExtend[k]=true; 
+                                 break; }
+                               
+                case BLBPI:                                                   // count=24 
+                           if (prevx==BLFPI)
+                              {skip=true; bExtend[k]=true; break;}            // bypass ID OK
+                           else
+                              {skip=false;                                    // failed bypass ID. 
+                              kill=true; 
+                              codex=BLBXO;
+                              code=RRBXO; 
+                              bExtend[k] = true; 
+                              break;}                         
+                              
+                case BTOK:                                                   // count=25: kill
+                           {howfarOK[k]=j; 
+                            vxtolab(k,j); 
+                            skip=false; 
+                            bExtend[k]=false; 
+                            kill=true; 
+                            break;}
+                                 
+                default:    System.out.println("RT13.switch() fail: k, j, prevx, codex = "+k+"  "+j+"  "+sCodex[prevx]+"  "+sCodex[codex]);
+            }
+
+            prevx = codex;          
+            howfarLoop[k] = j;        
+            if (kill)
+            {
+                iFailSurf = j;
+                iFailCode = codex; 
+                break; 
+            }
+            if (skip)
+                clobberAll(k,j); 
+        }
+        if (bExtend[k])
+            vExtendLabs(k); // this overwrites the final vxtolab()
+        if (DEBUG)    
+           System.out.println("bRunOneRay() is exitting loop with code, codex = "+sResults[code]+"  "+sCodex[codex]+"\n");
+        boolean bFullDistance = (howfarOK[k] == nsurfs);
+        status[k] = code;          // update the status flag 
+        return bFullDistance;      // (code==RROK)? final bypasses are not OK since howfar<Nsurfs. 
+
+    } //--------end of bRunOneRay()-----------------------
+
+
+
+    static public boolean bRunRandomRay()
+    // This edition has no WFE group support. A207
+    {
+        return bRunOneRay(0);   // includes iCreateOneRandomRayStart()
     }
 
 
@@ -663,12 +734,11 @@ class RT13 implements B4constants
 
     private static int kGuideRay      = 0; 
     private static boolean bExtend[]  = new boolean[MAXRAYS+1]; 
-    private static int stat[]    = new int[MAXRAYS+1];
-    private static int howfar[]       = new int[MAXRAYS+1];
+    private static int status[]       = new int[MAXRAYS+1];
+    private static int howfarOK[]     = new int[MAXRAYS+1];
+    private static int howfarLoop[]   = new int[MAXRAYS+1]; 
     
-    private static int     jfound[][] = new int[MAXRAYS+1][MAXGROUPS+1];  
-    private static double  rayseq[][] = new double[MAXGROUPS+1][RNATTRIBS];
-    private static double dRays[][][] = new double[MAXRAYS+1][MAXGROUPS+1][RNATTRIBS];
+    private static double dRays[][][] = new double[MAXRAYS+1][MAXSURFS+1][RNATTRIBS];
 
     private static boolean   bUserOptionPositive = true; 
     private static int       iUserOptionMethod = 0; 
@@ -676,16 +746,17 @@ class RT13 implements B4constants
     
     /*--------------for WFE table and random-----------------*/
 
-    private static double dWFE[]      = new double[MAXRAYS+1];      
-    private static double sWFE[][]    = new double[MAXWFEGROUPS][3]; 
-    private static double eWFE[][]    = new double[MAXWFEGROUPS][3]; 
-    private static double avgWFE[]    = new double[MAXWFEGROUPS]; 
-    private static double tiltWFE[][] = new double[MAXWFEGROUPS][3]; 
-    private static int    ijWFE[][]   = new int[MAXWFEGROUPS][2];     // pupil
+    // private static double dWFE[]      = new double[MAXRAYS+1];      
+    // private static double sWFE[][]    = new double[MAXWFEGROUPS][3]; 
+    // private static double eWFE[][]    = new double[MAXWFEGROUPS][3]; 
+    // private static double avgWFE[]    = new double[MAXWFEGROUPS]; 
+    // private static double tiltWFE[][] = new double[MAXWFEGROUPS][3]; 
+    // private static int    ijWFE[][]   = new int[MAXWFEGROUPS][2];     // pupil
     
-    private static int    ngood = 0; 
+    private static int ngood = 0; 
     
     
+/* A207 eliminated this task temporarily
 
     static private void doWFEtask(int gngood, int gnrays, int gnsurfs)
     // Run this after each ray trace regardless of presence of WFEcolumn.
@@ -724,7 +795,7 @@ class RT13 implements B4constants
         {
             int ngg = 0;
             for (int k=1; k<=gnrays; k++)
-              if (bGoodRay[k] && (ig == iWFEgroup[k]))
+              if (isRayOK[k] && (ig == iWFEgroup[k]))
               {
                   sWFE[ig][RX] += dRays[k][0][RX]; 
                   sWFE[ig][RY] += dRays[k][0][RY]; 
@@ -748,7 +819,7 @@ class RT13 implements B4constants
 
         double dsk, dek; 
         for (int k=1; k<=gnrays; k++)         //---correct each ray-----
-          if (bGoodRay[k])
+          if (isRayOK[k])
           {
               int ig = iWFEgroup[k]; 
               dsk = (dRays[k][0][RX]-sWFE[ig][RX])*dRays[k][0][RU]
@@ -768,7 +839,7 @@ class RT13 implements B4constants
             int ngg = 0; 
             for (int k=1; k<=gnrays; k++)
             {
-                if (bGoodRay[k] && (ig == iWFEgroup[k]))
+                if (isRayOK[k] && (ig == iWFEgroup[k]))
                 {
                     avgWFE[ig] += dWFE[k];
                     ngg++; 
@@ -782,7 +853,7 @@ class RT13 implements B4constants
         }
 
         for (int k=1; k<=gnrays; k++)   //----subtract group average-----
-          if (bGoodRay[k])
+          if (isRayOK[k])
             dWFE[k] -= avgWFE[iWFEgroup[k]];
 
         //-----------now fit spherical wavefront to WFE------
@@ -793,7 +864,7 @@ class RT13 implements B4constants
             int ngg = 0; 
             for (int k=1; k<=gnrays; k++)
             {
-                if (bGoodRay[k] && (ig == iWFEgroup[k]))
+                if (isRayOK[k] && (ig == iWFEgroup[k]))
                 {
                     for (int iatt=0; iatt<6; iatt++)
                       rr[ngg][iatt] = dRays[k][gnsurfs][iatt]; 
@@ -810,17 +881,17 @@ class RT13 implements B4constants
                 //---finally apply this fit to the rays-----
 
                 for (int k=1; k<=gnrays;  k++)
-                  if (bGoodRay[k] && (ig == iWFEgroup[k]))
+                  if (isRayOK[k] && (ig == iWFEgroup[k]))
                     dWFE[k] -= tiltWFE[ig][0]
                               + tiltWFE[ig][1]*dRays[k][gnsurfs][jx]
                               + tiltWFE[ig][2]*dRays[k][gnsurfs][jy];
             } 
         }
     } //----------finished with doWFEtable()-----------------------
+*/
 
 
-
-    static private boolean bGetPupil(double rr[][], int g, int n, int ij[])
+    static private boolean bGetBestPupil(double rr[][], int g, int n, int ij[])
     // Discovers which of {xy, xz, yz, uv, uw, vw} is the pupil. 
     {
         double big[] = new double[6];
@@ -877,18 +948,24 @@ class RT13 implements B4constants
             case 5: ij[0]=4; ij[1]=5; return true; 
         }
         return false; 
-    } //----completes bGetPupil()--------
+    } //----completes bGetBestPupil()--------
 
 
 
-    static private int iInitRaySeq(int kray, int nsurfs)
-    // This moves raystarts[] into  rayseq[][].
-    // It is called only from bRunray(). 
-    // Constructs rayseq[j=0]: the labframe ray start for bRunray(). 
-    // Its input data are the numbers in raystarts[kray].
-    // Returns the value of kGuideRay employed, 1...nrays,
-    // even given kray=0, where a random nonzero kray gets employed. 
+
+
+
+
+
+
+
+
+    static private int iCreateOneRandomRayStart()
     {
+        // A207: sets up a random ray start as raystarts[0]
+        // Called only by bRunOneRay(k) when k==0.
+        // MUST NEVER RETURN ZERO.
+        
         //---Set up user options for this ray trace; used below-------
 
         bUserOptionPositive = "T".equals(DMF.reg.getuo(UO_DEF, 3)); 
@@ -897,18 +974,14 @@ class RT13 implements B4constants
             iUserOptionMethod = i; 
         dIsoRadius = U.suckDouble(DMF.reg.getuo(UO_DEF,9)); 
         int nrays = DMF.giFlags[RNRAYS];
-        int iGroup = 0;  
 
-        //----Clear out entire rayseq[] from previous run------
+        //----Clear out entire ray zero from previous run------
         for (int j=0; j<=MAXSURFS; j++)
-        {
-            for (int i=RX; i<=RTWL; i++)
-              rayseq[j][i] = -0.0;
-        }
+            for (int i=RX; i<RNSTARTS; i++)
+                raystarts[0][i] = -0.0;
 
         //-----set up for distributions--------------
 
-        boolean bRandom = (kray == 0); 
         boolean bXYZcontinuous = "T".equals(DMF.reg.getuo(UO_RAND,3)); 
         boolean bUVWcontinuous = "T".equals(DMF.reg.getuo(UO_RAND,5)); 
         boolean bUniform  = "T".equals(DMF.reg.getuo(UO_RAND, 7)); 
@@ -920,126 +993,101 @@ class RT13 implements B4constants
         dConcen = Math.max(1, dConcen); 
         int which = bCosine ? 1 : bBell ? 2 : bGauss ? 3: bLorentz ? 4 : 0;  
         
-        if (bRandom) // Choose a random local kray for color, wavel, order.
-        {
-            kray = (int) (nrays * Math.random() + 1.0); 
-            iGroup = iWFEgroup[kray]; 
-        }
+        // Choose a random table kray for color, wavel, order.
+        int krand = (int) (nrays * Math.random() + 1.0); 
 
         //----Construct the random ray values XYZUVWP here-------------
      
-
         int krandxyz = (int) (nrays * Math.random() + 1.0);  
         for (int i=RX; i<=RZ; i++)
         {   
-            boolean bAbsent = U.isNegZero(raystarts[kray][i]); 
+            boolean bAbsent = U.isNegZero(raystarts[krand][i]); 
             if (bAbsent)  // unspecified start
-              rayseq[0][i] = -0.0; 
-            else if (bRandom)
             {
-                if (bXYZcontinuous)
-                  rayseq[0][i] = smins[iGroup][i] + getRand(which, dConcen)*spans[iGroup][i]; 
-                else
-                  rayseq[0][i] = raystarts[krandxyz][i]; 
+                raystarts[0][i] = -0.0; 
             }
             else
-              rayseq[0][i] = raystarts[kray][i]; 
+            {
+                if (bXYZcontinuous)        // continuous distribution
+                   raystarts[0][i] = smins[i] + getRand(which, dConcen)*spans[i]; 
+                else                       // discrete distribution
+                   raystarts[0][i] = raystarts[krandxyz][i]; 
+            }
         }  
 
         int kranduvw = (int) (nrays * Math.random() + 1.0);           
         for (int i=RU; i<=RW; i++)
         {   
-            boolean bAbsent = U.isNegZero(raystarts[kray][i]); 
+            boolean bAbsent = U.isNegZero(raystarts[krand][i]); 
             if (bAbsent)  // unspecified start
-              rayseq[0][i] = -0.0; 
-            else if (bRandom)
             {
-                if (bUVWcontinuous)
-                  rayseq[0][i] = smins[iGroup][i] + getRand(which, dConcen)*spans[iGroup][i]; 
-                else
-                  rayseq[0][i] = raystarts[kranduvw][i]; 
+                raystarts[0][i] = -0.0; 
             }
             else
-              rayseq[0][i] = raystarts[kray][i]; 
+            {
+                if (bUVWcontinuous)
+                    raystarts[0][i] = smins[i] + getRand(which, dConcen)*spans[i]; 
+                else
+                    raystarts[0][i] = raystarts[kranduvw][i]; 
+            }
         }  
 
-        rayseq[0][RPATH] = raystarts[kray][RPATH]; 
+        raystarts[0][RPATH] = raystarts[krand][RPATH]; 
 
-        //-----Now have the defined rays, table or random---------
+        //-----Now have the random ray start----------------------
         //-----but still have -0.0 for absentee rays--------------
         //-----Fill in isotropic random direction cases next------
 
-        if (bRandom)
+
+        double span = 1.0 - U.cosd(dIsoRadius); 
+        switch(iUserOptionMethod)
         {
-            double span = 1.0 - U.cosd(dIsoRadius); 
-            switch(iUserOptionMethod)
-            {
-              case 0:  // volume  
-                 break;
-              case 1:  // isotropic U0 
-                 {
-                     double s = span * Math.random();
-                     double p = U.TWOPI * Math.random(); 
-                     double q = bUserOptionPositive ? 1-s : s-1; 
-                     double r = Math.sqrt(1.0 - q*q); 
-                     rayseq[0][RU] = q; 
-                     rayseq[0][RV] = r * Math.cos(p); 
-                     rayseq[0][RW] = r * Math.sin(p); 
-                 }
-                 break; 
-              case 2:  // isotropic V0 
-                 {
-                     double s = span * Math.random();
-                     double p = U.TWOPI * Math.random(); 
-                     double q = bUserOptionPositive ? 1-s : s-1; 
-                     double r = Math.sqrt(1.0 - q*q); 
-                     rayseq[0][RV] = q; 
-                     rayseq[0][RU] = r * Math.cos(p); 
-                     rayseq[0][RW] = r * Math.sin(p); 
-                 }
-                 break; 
-              case 3: // isotropic W0
-                 {
-                     double s = span * Math.random();
-                     double p = U.TWOPI * Math.random(); 
-                     double q = bUserOptionPositive ? 1-s : s-1; 
-                     double r = Math.sqrt(1.0 - q*q); 
-                     rayseq[0][RW] = q; 
-                     rayseq[0][RU] = r * Math.cos(p); 
-                     rayseq[0][RV] = r * Math.sin(p); 
-                 }
-                 break; 
+          case 0:  // volume  
+             break;
+          case 1:  // isotropic U0 
+             {
+                 double s = span * Math.random();
+                 double p = U.TWOPI * Math.random(); 
+                 double q = bUserOptionPositive ? 1-s : s-1; 
+                 double r = Math.sqrt(1.0 - q*q); 
+                 raystarts[0][RU] = q; 
+                 raystarts[0][RV] = r * Math.cos(p); 
+                 raystarts[0][RW] = r * Math.sin(p); 
              }
-         }
-
-        //---If there are still absentees {U0, V0, W0} then ----
-        //---the lastAbsentAttrib will receive the makeup--------
-
-        int lastAbsentAttrib = 0; 
-        for (int i=RU; i<=RW; i++)
-          if (U.isNegZero(rayseq[0][i]))
-            lastAbsentAttrib = i; 
-
-        if (lastAbsentAttrib > 0)
-        // One or more absentees; fix up lastAbsentAttrib.
-        // Since absentees are -0.0, no need to skip their summation.
-        // Normalize later; also handles null vector case. 
-        {
-            double sign = bUserOptionPositive ? 1.0 : -1.0; 
-            double sumsq = 0.0; 
-            for (int i=RU; i<=RW; i++)
-              sumsq += rayseq[0][i]*rayseq[0][i]; 
-            if (sumsq <= 1.0)
-              rayseq[0][lastAbsentAttrib] = sign*Math.sqrt(1-sumsq);
+             break; 
+          case 2:  // isotropic V0 
+             {
+                 double s = span * Math.random();
+                 double p = U.TWOPI * Math.random(); 
+                 double q = bUserOptionPositive ? 1-s : s-1; 
+                 double r = Math.sqrt(1.0 - q*q); 
+                 raystarts[0][RV] = q; 
+                 raystarts[0][RU] = r * Math.cos(p); 
+                 raystarts[0][RW] = r * Math.sin(p); 
+             }
+             break; 
+          case 3: // isotropic W0
+             {
+                 double s = span * Math.random();
+                 double p = U.TWOPI * Math.random(); 
+                 double q = bUserOptionPositive ? 1-s : s-1; 
+                 double r = Math.sqrt(1.0 - q*q); 
+                 raystarts[0][RW] = q; 
+                 raystarts[0][RU] = r * Math.cos(p); 
+                 raystarts[0][RV] = r * Math.sin(p); 
+             }
+             break; 
         }
-
-        normalizeLab(rayseq[0]); // normalizes, repairs null vector.
-        for (int i=RX; i<=RW; i++)
-          if (-0.0==rayseq[0][i])
-            rayseq[0][i] = 0.0;  // clean up any remaining -0.0 cases.
-
-        return kray; 
+        fixupLabUVW(0); 
+        // System.out.printf("RT13.iCreateRandomRay() using smins[RU]  = %8.4f \n", smins[RU]);
+        // System.out.printf("RT13.iCreateRandomRay() using spans[RU]  = %8.4f \n", spans[RU]);
+        // System.out.printf("RT13.iCreateRandomRay() has generated U0 = %8.4f \n", raystarts[0][RU]);
+        // System.out.printf("RT13.iCreateRandomRay() has generated V0 = %8.4f \n", raystarts[0][RV]);
+        // System.out.printf("RT13.iCreateRandomRay() has generated W0 = %8.4f \n", raystarts[0][RW]);
+        return krand;
     }
+
+
 
     static private double getRand(int which, double dConcen)
     // returns 0<x<1 with various distribution densities.
@@ -1138,32 +1186,18 @@ class RT13 implements B4constants
     }
 
 
-    static private void vPropagate(double ray[], double d, double dI, double s[])
-    // Extends a ray for a distance d.
+    static private void vPropagate(int kray, int jsurf, double d)
+    // Propagates a ray for a distance d in vertex coordinate system.
     // Void because this cannot fail. 
-    // Index is needed only for RPATH. 
+    // Refractive index dI is needed only for RPATH. 
     {
-        ray[RTXL] += ray[RTUL] * d; 
-        ray[RTYL] += ray[RTVL] * d; 
-        ray[RTZL] += ray[RTWL] * d; 
-        ray[RPATH] += dI * d;
-        if (s[OTYPE] == OTDISTORT)
-          ray[RPATH] -= ray[RTZL]; 
-    }
-
-
-    static private void vExtend(double ray[])
-    // Extends a failed ray for layout dotted indicator.
-    // Just like vPropagate() but used for failed rays. 
-    // Extension length depends on diams of target surface.
-    // Does not update ray[RPATH] nor should it. 
-    {
-        double d = 0.02 * DMF.getOsize(); 
-        if (d<TOL)
-          d = 0.01; 
-        ray[RTXL] += ray[RTUL] * d; 
-        ray[RTYL] += ray[RTVL] * d; 
-        ray[RTZL] += ray[RTWL] * d; 
+        double dIndex = getRefraction(jsurf, kray); 
+        dRays[kray][jsurf][RTXL] += dRays[kray][jsurf][RTUL] * d; 
+        dRays[kray][jsurf][RTYL] += dRays[kray][jsurf][RTVL] * d; 
+        dRays[kray][jsurf][RTZL] += dRays[kray][jsurf][RTWL] * d; 
+        dRays[kray][jsurf][RPATH] += dIndex * d;
+        if (surfs[jsurf][OTYPE] == OTDISTORT)
+          dRays[kray][jsurf][RPATH] -= dRays[kray][jsurf][RTZL]; 
     }
 
 
@@ -1175,22 +1209,39 @@ class RT13 implements B4constants
 
 
 
+
+
     /*---------optical methods: interceptors & rootfinders--------*/
     /*---------optical methods: interceptors & rootfinders--------*/
     /*---------optical methods: interceptors & rootfinders--------*/
+    
+    static private int intercept(int kray, int jsurf)
+    // calls dIntercept, propagates if OK: returns RR code: RROK, RRMIS, RRBAK, RRBRA
+    {
+        int code = RROK; 
+        double d = dIntercept(dRays[kray][jsurf], surfs[jsurf]);
+        if (d >= 0.0)
+            vPropagate(kray, jsurf, d);
+        else
+            code = (int) Math.round(-d); // RRMIS=1, RRBAK=2, RRBRA=3
+        // System.out.println("intercept is returning " + sResults[code]); 
+        return code; 
+    }
+        
 
     static private double dIntercept(double ray[], double surf[])
-    // This does not move the ray.  Instead, if OK, recommends d>=0;
+    // Mathematical surface intercept test does not test Diameters. 
+    // Returns  d>0 if an intercept can be identified.. 
     // RAY length = ZERO is VALID for plane surfaces;  (exactly zero? slightly negative?)
     // RAY length = ZERO is INVALID for curved surfaces. 
-    // vPropagate() is called later if decision after Diams = GO.
+    // vPropagate() is called later if decision after result = RROK
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
-    // Return values: RROK, -RRMIS, -RRBAK, -RRDIA, -RRSPI, etc 
+    // Return values: RROK, -RRMIS, -RRBAK, -RRBRA. 
     {
         int iType = U.getInt(surf[OTYPE]);
         double dpro = surf[OPROFILE]; 
         int profile = U.getInt(dpro); 
-
+        boolean rayok = isNormalizedVx(ray); 
         boolean bArray = ((iType==OTLENSARRAY) || (iType==OTMIRRARRAY)); // irisarray?
         double d = 0.0; 
         if (iType == OTIRISARRAY)
@@ -1217,8 +1268,11 @@ class RT13 implements B4constants
            case OSPOLYREV:
            case OSZERNREV:
            case OSZERNTOR: 
-           case OSBICONIC: d = dNumSolve(ray, surf); 
+           case OSBICONIC: 
+           case OSGAUSS: d = dNumSolve(ray, surf); 
                            break;
+            default: System.out.println("RT13.dIntercept() has unknown profile = "+profile); 
+            
         }
         if (Math.abs(d) < TOL)
           d = 0.0;
@@ -1232,6 +1286,10 @@ class RT13 implements B4constants
     // ZERO=VALID is OK here. 
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003, 2005, 2010
     {
+        // System.out.printf("   RT13.dPlaneSolve() starting with RTWL = %12.6f \n", ray[RTWL]);
+        boolean rayOK = isNormalizedVx(ray); 
+        if (!rayOK)
+            System.out.println("   RT13.dPlaneSolve() has an UNNORMALIZED ray.");
         if (Math.abs(ray[RTWL]) < TOL)
           return -RRMIS;            // negative code 
         double d = -ray[RTZL] / ray[RTWL]; 
@@ -1256,6 +1314,8 @@ class RT13 implements B4constants
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003, 2007, 2012
     // Returns error codes -RRMIS, -RRBAK, -RRDIA, -RRSPI, ...
     {
+        // System.out.println("Starting dQuadSolve().");
+        boolean rayok = isNormalizedVx(ray); 
         double c, s, x, y, z, u, v, w, d;
         double[] dd = new double[2]; 
         double abc[] = new double[3]; 
@@ -1314,12 +1374,15 @@ class RT13 implements B4constants
         //-------get positive roots and test them-------------
 
         int nroots = iGetPosRoots(abc, dd); 
-
+        
+        // System.out.println("dQuadSolve nroots = "+nroots); 
+        
         double  cz0 = c*(z+w*dd[0]);   // vxframe departure from plano
         double  cz1 = c*(z+w*dd[1]);   // vxframe departure from plano
         boolean E0  = s*cz0 < 1.0;     // existence check
         boolean E1  = s*cz1 < 1.0;     // existence check
 
+        // System.out.printf("dQuadSolve cx0, cz1 = %6.3f  %6.3f \n", cz0, cz1);
         switch (nroots)
         {
             case -1:            // no real roots whatsoever
@@ -1344,8 +1407,8 @@ class RT13 implements B4constants
   
               //----both roots exist; test Diameters----------
               
-              int D0 = testDiameter(dd[0], ray, surf); // RROK=0 or RRDIA, RRSPI, ...
-              int D1 = testDiameter(dd[1], ray, surf); // RROK=0 or RRDIA, RRSPI, ...
+              int D0 = testDiameter(dd[0], ray, surf);
+              int D1 = testDiameter(dd[1], ray, surf); 
               
               if ((D0==RROK) && (D1!=RROK))  // one good intercept
                 return dd[0]; 
@@ -1426,11 +1489,9 @@ class RT13 implements B4constants
         return dBest;  
     }
 
-
-
     static private double dNumSolve(double ray[], double surf[])
     // Returns propagation length if OK, else -1.0.
-    // Relies upon Z.vGetZsurf() for the surface model. 
+    // Relies upon Z.dGetZsurf() for the surface model. 
     // How to manage HINT for best efficiency?
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003, 2005
     // Error: -RRBAK
@@ -1443,8 +1504,6 @@ class RT13 implements B4constants
         }
         return -RRBAK;  // bracket fail is usually due to backward ray 
     }
-
-
 
     private static boolean bBracket(double d[], double r[], double s[])
     {
@@ -1497,11 +1556,10 @@ class RT13 implements B4constants
     }
 
 
-
     private static int iBrent(double t[], double ray[], double surf[])
     //  Given a bracket (t[0], t[1]), Brent() sets t[0] to root,
     //  and returns the number of calls to zDiff() taken.
-    //  Relies upon Z.vGetZsurf() for the surface model. 
+    //  Relies upon Z.dGetZsurf() for the surface model. 
     //  Press et al NUMERICAL RECIPES IN C 2nd edition 1992 p.361
     //  R.P.Brent ALGORITHMS... Prentice-Hall, NJ 1973.
     {
@@ -1588,7 +1646,7 @@ class RT13 implements B4constants
     static private double zDiff(double d, double ray[], double surf[])
     // This is the engine that is called by bBracket() and iBrent().
     // Returns the z-component of discrepancy ray-surface.
-    // Relies upon Z.vGetZsurf() for the surface model. 
+    // Relies upon Z.dGetZsurf() for the surface model. 
     {
         double xyz[] = new double[3]; 
         xyz[0] = ray[RTXL] + ray[RTUL]*d; 
@@ -1599,17 +1657,28 @@ class RT13 implements B4constants
 
 
 
-    /*--------------------Diameters and iris-------------------*/
-    /*--------------------Diameters and iris-------------------*/
-    /*--------------------Diameters and iris-------------------*/
 
+
+
+
+
+
+    /*--------------------Diameters-------------------*/
+    /*--------------------Diameters-------------------*/
+    /*---A207 eliminating special code for iris-------*/
+
+
+    static private int validate(int kray, int jsurf)
+    {
+        int code = iDiams(dRays[kray][jsurf], surfs[jsurf]);
+        // System.out.println("Validate is returning " + sResults[code]);
+        return code; 
+    }
 
     static private int iDiams(double ray[], double surf[])
     // Returns RROK if ok, else a positive failure code RRDIA, RRiri, etc.
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003, 2013
     {
-        boolean bIris = (OTIRIS == surf[OTYPE]);
-
         boolean bIRect = ((OFIRECT==surf[OFORM]) || (OFBRECT==surf[OFORM]));
         boolean bORect = ((OFORECT==surf[OFORM]) || (OFBRECT==surf[OFORM]));
         
@@ -1632,7 +1701,7 @@ class RT13 implements B4constants
             
             boolean bhole = bIRect ? Math.max(sx,sy)<1.0 : sx+sy<1.0;
             if (bhole)
-              return bIris ? RRiri : RRdia;    
+              return RRdia;    
         }
 
         //-----do the outer edge--------
@@ -1652,7 +1721,7 @@ class RT13 implements B4constants
 
             boolean bedge = bORect ? Math.max(sx,sy)>1.0 : sx+sy>1.0;
             if (bedge)
-              return bIris ? RRIRI : RRDIA;
+              return RRDIA;
         }
 
         // Now do the spider legs in X,Y plane
@@ -1680,14 +1749,12 @@ class RT13 implements B4constants
         return RROK; 
     }
 
-
-
     static private int iIrisArray(double ray[], double surf[])
     // Returns RROK or RRIRI or RRDIA.
     // Model: infinite plane barrier with holes.
     //    ** Within Rinner, ray passes with  RROK;
     //    ** Beyond Router, ray dies with RRDIA;
-    //    ** In between, ray dies with RRiri.
+    //    ** In between, ray dies with RRdia
     // M.Lampton STELLAR SOFTWARE (C) 2007
     {
         boolean bIRect = ((OFIRECT==surf[OFORM]) || (OFBRECT==surf[OFORM]));
@@ -1727,9 +1794,9 @@ class RT13 implements B4constants
             double sy = 4 * y*y/(diay*diay); 
             // if either is too big, we hit the mask:
             if (bIRect && (Math.max(sx, sy) > 1.0))
-              return RRiri; 
+              return RRdia; 
             if (!bIRect && (sx + sy > 1.0))
-              return RRiri;  
+              return RRdia;  
         }
         return RROK; 
     }
@@ -1741,17 +1808,21 @@ class RT13 implements B4constants
 
 
 
-
-
-
-
-
     /*-------------------------redirectors----------------------*/
     /*-------------------------redirectors----------------------*/
     /*-------------------------redirectors----------------------*/
+    
+    static private int redirect(int kray, int jsurf)
+    // attempts to redirect a ray segment; returns RROK or error code
+    {
+        // System.out.println("RT13.redirect() is given kray, jsurf = "+kray+"  "+jsurf); 
+        int code = iRedirect(dRays[kray], surfs[jsurf], jsurf);
+        // System.out.println("RT13.redirect is returning " + sResults[code]);
+        return code;
+    }
 
 
-    static private int iRedirect(double rayseq[][], double surf[], int j, int g)
+    static private int iRedirect(double rayseq[][], double surf[], int j)
     // M.Lampton STELLAR SOFTWARE (C) 2013
     //
     // Modifies the local-frame u,v,w to redirect this ray. 
@@ -1761,38 +1832,44 @@ class RT13 implements B4constants
     // Receives status from preceding Diam() check. 
     // Returns RROK, RRUNK, RRORD, RRTIR. 
     {
-        vSetAngle(rayseq[g], surf);  // sets incoming RTANGLE fields before modifying ray direction
+        vSetAngle(rayseq[j], surf);  // sets incoming RTANGLE fields before modifying ray direction
         boolean bGroovy = surf[OGROOVY] != 0.0; 
         int surftype = (int) surf[OTYPE]; 
         switch(surftype)
         {
              case OTBLFRONT:      // successful refraction at bimodal lens
              case OTBLBACK:
-                    return iTG(rayseq[g], surf, j); 
+                    return iTG(rayseq[j], surf, j); 
+             case OTBMIRROR:
+                    return iMirror(rayseq[j], surf);
              case OTDISTORT:
                     return RROK; 
              case OTIRIS: 
              case OTIRISARRAY:
                     return RROK; // no redirection needed.  
              case OTRETRO: 
-                    return iRetro(rayseq[g], surf); 
+                    return iRetro(rayseq[j], surf); 
              case OTMIRROR:
              case OTMIRRARRAY:
                     if (bGroovy) 
-                      return iRgrating(rayseq[g], surf);
+                      return iRgrating(rayseq[j], surf);
                     else
-                      return iMirror(rayseq[g], surf); 
+                      return iMirror(rayseq[j], surf); 
              case OTLENS:
              case OTLENSARRAY:
-                    return iTG(rayseq[g], surf, j); 
-             case OTSCATTER:
-                    return iScatter(rayseq[g], surf); 
-             case OTCBIN:  // CoordBreak input surface
-                    return iCBIN(rayseq, surf, g);  // copy previous local uvw
-             case OTCBOUT: // CoordBreak output surface 
-                    return iCBOUT(rayseq, surf, g); // copy previous local xyzuvw
+                    return iTG(rayseq[j], surf, j); 
+             case OTGSCATTER:
+                    return iGScatter(rayseq[j], surf);   // A195
+             case OTUSCATTER:
+                    return iUScatter(rayseq[j], surf);   // A195
+             case OTCBIN:      // CoordBreak input surface
+                    return iCBIN(rayseq, surf, j);  // copy previous local uvw
+             case OTCBOUT:     // CoordBreak output surface 
+                    return iCBOUT(rayseq, surf, j); // copy previous local xyzuvw
+             case OTTERMINATE:  // ray killer MUST BECOME BIMODAL
+                     return RRTER; 
         }
-        return RRNON; 
+        return RRUNK; 
     }
     
     
@@ -1878,6 +1955,7 @@ class RT13 implements B4constants
         double numer, denom, mu, ax, ay, az, bx, by, bz, b2, gamma, dotin;
 
         int kray = getGuideRay(); 
+        System.out.println("iSnell called getGuideRay() and has got " + kray);
         numer = getRefraction(jsurf, kray); 
         denom = getRefraction(jsurf+1, kray); 
 
@@ -1917,14 +1995,58 @@ class RT13 implements B4constants
     }
 
 
+    static private void getG(double ray[], double surf[], double G[])
+    // evaluates local groove density. Returns G[0]=gx, G[1]=gy.
+    {
+        double x = ray[RTXL]; 
+        double x2 = x*x; 
+        double x3 = x2*x;
+        double x4 = x2*x2; 
+        double y = ray[RTYL]; 
+        double y2 = y*y;
+        double y3 = y2*y; 
+        double y4 = y2*y2; 
+                    
+        double gx = surf[OGX] + x*surf[OVX10] + x2*surf[OVX20] + x3*surf[OVX30] + x4*surf[OVX40]
+                 + y*surf[OVX01] + y2*surf[OVX02] + y3*surf[OVX03] + y4*surf[OVX04]
+                 + x*y*surf[OVX11] + x*y2*surf[OVX12] +x*y3*surf[OVX13]
+                 + x2*y*surf[OVX21] + x2*y2*surf[OVX22] + x3*y*surf[OVX31]; 
+                        
+        double gy = surf[OGY] + x*surf[OVY10] + x2*surf[OVY20] + x3*surf[OVY30] + x4*surf[OVY40]
+                + y*surf[OVY01] + y2*surf[OVY02] + y3*surf[OVY03] + y4*surf[OVY04]
+                + x*y*surf[OVY11] + x*y2*surf[OVY12] + x*y3*surf[OVY13]
+                + x2*y*surf[OVY21] + x2*y2*surf[OVY22] + x3*y*surf[OVY31]; 
+                        
+        if (Math.abs(surf[OHOELAM]) > TOL)    // add HOE terms.....
+        {
+            double d1 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX1])
+                                  + U.sqr(ray[RTYL] - surf[OHOEY1])
+                                  + U.sqr(ray[RTZL] - surf[OHOEZ1]));
+ 
+            double d2 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX2])
+                                    + U.sqr(ray[RTYL] - surf[OHOEY2])
+                                    + U.sqr(ray[RTZL] - surf[OHOEZ2]));
+
+            if ((d1 > TOL) && (d2 > TOL))
+            {
+                double a1 = 1.0 / (d1*surf[OHOELAM]);     // virtual HOE if <0
+                double a2 = 1.0 / (d2*surf[OHOELAM]);
+                gx += a1*(ray[RTXL]-surf[OHOEX1])-a2*(ray[RTXL]-surf[OHOEX2]);
+                gy += a1*(ray[RTYL]-surf[OHOEY1])-a2*(ray[RTYL]-surf[OHOEY2]);
+            }
+        }       
+        G[0] = gx;
+        G[1] = gy;                 
+    }
+
     static private int iTG(double ray[], double surf[], int jsurf)
-    // Transmission grating solver: refraction and diffraction combined.
+    // Plane Transmission grating solver: refraction and diffraction combined.
     // Must have numerical wavelength not literal if using diffraction. 
     //
     // Could replace iSnell() !
     //
-    // Has VPHs but excludes HOEs.
-    // M.Lampton STELLAR SOFTWARE (C) 2015  rev A186
+    // Has VPHs and HOEs.
+    // M.Lampton STELLAR SOFTWARE (C) 2015  rev A186, A194
     // Spencer & Murty JOSA 52#6 672 (1962) eqn 49, three terms in local frame
     // Refraction of incoming ray S...
     //    S' = (n2/n1)*S 
@@ -1963,51 +2085,21 @@ class RT13 implements B4constants
         // Get order from raystart, or if absent, from the optic table. 
         double order = surf[OORDER]; 
         double rayorder = raystarts[kray][RSORDER]; 
-        if (!U.isNegZero(rayorder))
+        if (U.isNotNegZero(rayorder))
           order = rayorder;
         if (order != 0)                // diffractive?
         {
             double wavel = raystarts[kray][RSWAVEL]; 
             if (Double.isNaN(wavel))
               return RRUNK; 
+              
             double waveorder = wavel*order; 
-            
-            double gx = surf[OGX];     // density in vertex frame
-            double gy = surf[OGY];     // density in vertex frame            
-            
-            if (waveorder != 0.)                      // and wavy?
-            {
-                if (Math.abs(gx) > TOL)               // add VLS in vertex frame...            
-                  gx += ray[RTXL] * (surf[OVLS1]
-                     + ray[RTXL] * (surf[OVLS2]
-                     + ray[RTXL] * (surf[OVLS3]
-                     + ray[RTXL] * surf[OVLS4])));
-                else if (Math.abs(gy) > TOL)
-                  gy += ray[RTYL] * (surf[OVLS1]
-                     + ray[RTYL] * (surf[OVLS2]
-                     + ray[RTYL] * (surf[OVLS3]
-                     + ray[RTYL] * surf[OVLS4])));        
-                     
-                if (Math.abs(surf[OHOELAM]) > TOL)    // add HOE terms.....
-                {
-                    double d1 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX1])
-                                          + U.sqr(ray[RTYL] - surf[OHOEY1])
-                                          + U.sqr(ray[RTZL] - surf[OHOEZ1]));
- 
-                    double d2 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX2])
-                                          + U.sqr(ray[RTYL] - surf[OHOEY2])
-                                          + U.sqr(ray[RTZL] - surf[OHOEZ2]));
 
-                    if ((d1 > TOL) && (d2 > TOL))
-                    {
-                        double a1 = 1.0 / (d1*surf[OHOELAM]);     // virtual HOE if <0
-                        double a2 = 1.0 / (d2*surf[OHOELAM]);
-                        gx += a1*(ray[RTXL]-surf[OHOEX1])-a2*(ray[RTXL]-surf[OHOEX2]);
-                        gy += a1*(ray[RTYL]-surf[OHOEY1])-a2*(ray[RTYL]-surf[OHOEY2]);
-                    }
-                }                     
-                          
-                Triple Grating = new Triple(gx, gy, 0.);           // in vertex frame
+            if (waveorder != 0.)       // If it is wavy...
+            {
+                double G[] = new double[2]; 
+                getG(ray, surf, G);
+                Triple Grating = new Triple(G[0], G[1], 0.);       // in vertex frame
                 Triple Diffract = Triple.getPerp(Grating, Unorm);  // in vertex frame
                 double coef = waveorder/denom;                     // scaling factor
                 Grating = Triple.getProduct(Grating, coef);        // in vertex frame
@@ -2039,12 +2131,18 @@ class RT13 implements B4constants
 
 
 
-    static private int iScatter(double ray[], double surf[])
+    static private int iGScatter(double ray[], double surf[])  
+    // A196: scatter is with respect to local normal not incoming ray direction
     {
-        double radians = (Math.PI/180.0) * surf[OSCATTER]; 
-        ray[RTUL] += radians * U.grand(); 
-        ray[RTVL] += radians * U.grand();
-        ray[RTWL] += radians * U.grand();  
+        double[] Norm = new double[RNATTRIBS];
+        vGetPerp(ray, surf, Norm);     
+        double radians = (Math.PI/180.0) * surf[OSCATTER]; // get the Gaussian scatter angle
+        // ray[RTUL] += radians * U.grand();               // add to previous ray direction
+        // ray[RTVL] += radians * U.grand();               // add to previous ray direction
+        // ray[RTWL] += radians * U.grand();               // add to previous ray direction
+        ray[RTUL] = Norm[RTUL] + radians * U.grand();      // deviate from local normal
+        ray[RTVL] = Norm[RTVL] + radians * U.grand();      // deviate from local normal
+        ray[RTWL] = 1.;
         double sum = U.sqr(ray[RTUL]) + U.sqr(ray[RTVL]) + U.sqr(ray[RTWL]); 
         sum = Math.sqrt(sum); 
         ray[RTUL] /= sum;  
@@ -2053,6 +2151,25 @@ class RT13 implements B4constants
         return RROK; 
     }
     
+    static private int iUScatter(double ray[], double surf[])  // A195 uniform scatter
+    // A196: scatter is with respect to local normal not vertex normal
+    {
+        double[] Norm = new double[RNATTRIBS];
+        vGetPerp(ray, surf, Norm); 
+        double azimuth = 2*Math.PI * Math.random(); 
+        double maxdeg = Math.max(0., Math.min(89.99, surf[OSCATTER]));
+        double maxradians = (Math.PI/180.)* maxdeg;
+        double radius = Math.sqrt(Math.random())*maxradians; 
+        ray[RTUL] = Norm[RTUL] + radius*Math.cos(azimuth); 
+        ray[RTVL] = Norm[RTVL] + radius*Math.sin(azimuth); 
+        ray[RTWL] = 1.;
+        double sum = U.sqr(ray[RTUL]) + U.sqr(ray[RTVL]) + U.sqr(ray[RTWL]); 
+        sum = Math.sqrt(sum); 
+        ray[RTUL] /= sum;  
+        ray[RTVL] /= sum; 
+        ray[RTWL] /= sum;
+        return RROK; 
+    }
 
     static private int iRgrating(double ray[], double surf[])
     {
@@ -2072,7 +2189,7 @@ class RT13 implements B4constants
     // and wave frequency match sets....
     //     |Ke| = |Ki|*v1/v2 = |Ki|*n2/n1.
     //
-    // May 2013: better is to include S&M's refraction.  Unit ray directions S1, S2:
+    // May 2013: better is to include Spencer & Murty's refraction.  Unit ray directions S1, S2:
     //      S2 x Normal = (n1/n2)* S1 x Normal + M*G*lambda**Q/n2
     // where Q is the unit vector parallel to local rulings. 
     // Sept 2015 A186 doing this implementation
@@ -2094,7 +2211,7 @@ class RT13 implements B4constants
     // classical gratings, except the local groove frequency vector gx gy gz
     // is computed from grad(PathDifference)/HOELambda, using the fact that
     // when the path difference is an integer number of lambda we have local
-    // constructive interference and a groove, but when it is a fraction
+    // constructive interference and a groove, but when it is half
     // of a wavelength we have destructive interference and no groove. 
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003 
     {
@@ -2113,51 +2230,21 @@ class RT13 implements B4constants
         // or if absent, from the optic table. 
         double order = surf[OORDER]; 
         double rayorder = raystarts[kray][RSORDER]; 
-        if (!U.isNegZero(rayorder))
+        if (U.isNotNegZero(rayorder))
           order = rayorder;
 
-        if (wavel*order == 0.0)
+        double waveorder = wavel*order;   
+        if (waveorder == 0.0)
         {
             if (bRefl)
               return iMirror(ray, surf);
             else
               return RROK;
         }
-   
-        gx = surf[OGX];
-        gy = surf[OGY];
 
-        if (Math.abs(gx) > TOL)              // add VLS terms....            
-          gx += ray[RTXL] * (surf[OVLS1]
-              + ray[RTXL] * (surf[OVLS2]
-              + ray[RTXL] * (surf[OVLS3]
-              + ray[RTXL] * surf[OVLS4])));
-        else if (Math.abs(gy) > TOL)
-          gy += ray[RTYL] * (surf[OVLS1]
-              + ray[RTYL] * (surf[OVLS2]
-              + ray[RTYL] * (surf[OVLS3]
-              + ray[RTYL] * surf[OVLS4])));
-
-        if (Math.abs(surf[OHOELAM]) > TOL)    // add HOE terms.....
-        {
-            d1 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX1])
-                           + U.sqr(ray[RTYL] - surf[OHOEY1])
-                           + U.sqr(ray[RTZL] - surf[OHOEZ1]));
- 
-            d2 = Math.sqrt(  U.sqr(ray[RTXL] - surf[OHOEX2])
-                           + U.sqr(ray[RTYL] - surf[OHOEY2])
-                           + U.sqr(ray[RTZL] - surf[OHOEZ2]));
-
-            if ((d1 > TOL) && (d2 > TOL))
-            {
-                a1 = 1.0 / (d1*surf[OHOELAM]);  // virtual HOE if <0
-                a2 = 1.0 / (d2*surf[OHOELAM]);
-                gx += a1*(ray[RTXL]-surf[OHOEX1])-a2*(ray[RTXL]-surf[OHOEX2]);
-                gy += a1*(ray[RTYL]-surf[OHOEY1])-a2*(ray[RTYL]-surf[OHOEY2]);
-                // gz += a1*(ray[RTZL]-surf[OHOEZ1])-a2*(ray[RTZL]-surf[OHOEZ2]);
-            }
-        }
-
+        double G[] = new double[2];  // groove density in x,y
+        getG(ray, surf, G); 
+        
         // Get the unit groove vector Q in vertex coords.
         // Method: Q = Norm cross G
         // Caution: Q must be a unit vector, even if G is zero, because it will
@@ -2168,9 +2255,9 @@ class RT13 implements B4constants
         double[] Norm = new double[13]; 
         vGetPerp(ray, surf, Norm); 
 
-        qx = -Norm[RTWL] * gy;
-        qy =  Norm[RTWL] * gx;
-        qz =  Norm[RTUL] * gy - Norm[RTVL] * gx;
+        qx = -Norm[RTWL] * G[1];
+        qy =  Norm[RTWL] * G[0];
+        qz =  Norm[RTUL] * G[1] - Norm[RTVL] * G[0];
 
         // normalize these
         qq = U.sqr(qx) + U.sqr(qy) + U.sqr(qz); 
@@ -2184,9 +2271,9 @@ class RT13 implements B4constants
         else  // g=0, nothing to diffract
         {
             if (bRefl)
-              return iMirror(ray, surf);
+              return iMirror(ray, surf);  // reflect without diffracting
             else
-              return RROK;
+              return RROK;                // transmit unchanged
         }
 
         // Get the local groove perpendicular P in vertex coordinates
@@ -2199,7 +2286,7 @@ class RT13 implements B4constants
 
         sp = px*ray[RTUL] + py*ray[RTVL] + pz*ray[RTWL];  // incident dot grooveperp
         sq = qx*ray[RTUL] + qy*ray[RTVL] + qz*ray[RTWL];  // incident dot groove
-        sr = Norm[RTUL]*ray[RTUL] + Norm[RTVL]*ray[RTVL] + Norm[RTWL]*ray[RTWL];  // inc dot normal
+        sr = Norm[RTUL]*ray[RTUL] + Norm[RTVL]*ray[RTVL] + Norm[RTWL]*ray[RTWL];  // incident dot normal
         double posdot = (sr >= 0.0) ? 1.0 : -1.0; 
 
         // Diffract the ray in local grating coordinates
@@ -2228,7 +2315,7 @@ class RT13 implements B4constants
 
 
     /*-------------vGetPerp finds the perp for any surface------------*/
-    /*---------------it always calls Z.vGetZnorm()--------------------*/
+    /*---------------it always calls Z.vGetNormal()--------------------*/
 
     static private void vGetPerp(double ray[], double surf[], double p[])
     // ray[13]; surf[121]; perp[13] is in local frame RTUL, RTVL, RTWL. 
@@ -2236,7 +2323,7 @@ class RT13 implements B4constants
     // Then, converts perp "q" from 3-Dim to 13-dim space for RT13. 
     {
         double q[] = new double[3]; 
-        Z.vGetZnorm(ray[RTXL], ray[RTYL], surf, q); 
+        Z.vGetNormal(ray[RTXL], ray[RTYL], surf, q); 
         p[RTUL] = q[0];
         p[RTVL] = q[1];
         p[RTWL] = q[2];  // USUALLY NEGATIVE.  WHY? 
@@ -2245,57 +2332,178 @@ class RT13 implements B4constants
 
 
 
-    /*-----------------some math utilities--------------------*/
-    /*-----------------some math utilities--------------------*/
-    /*-----------------some math utilities--------------------*/
+    /*-----------------some coordinate changing utilities--------------------*/
+    /*-----------------some coordinate changing utilities--------------------*/
+    /*-----------------some coordinate changing utilities--------------------*/
 
 
-
-    static private void labtovx(double rprev[], double rthis[], double surf[])
-    // Coordinate frame changer, also moves from surf=j to j+1.
-    // Matrix OE converts local to lab coordinates; must transpose it here.
-    // Also carries RPATH forward from rprev[] to rthis[]. 
+    
+    static private void labtovx(int k, int jprev, int j)
+    // Coordinate frame changer from lab jprev to vertex frame j.
+    // Matrix OE converts local to lab coordinates; so use its transpose here.
+    // Also carries RPATH forward from rprev[] to rthis[] ??
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003
     {
-        double a, b, c;
-        a = rprev[RX] - surf[OX];
-        b = rprev[RY] - surf[OY];
-        c = rprev[RZ] - surf[OZ];
-        rthis[RTXL] = surf[OE11]*a + surf[OE21]*b + surf[OE31]*c;
-        rthis[RTYL] = surf[OE12]*a + surf[OE22]*b + surf[OE32]*c;
-        rthis[RTZL] = surf[OE13]*a + surf[OE23]*b + surf[OE33]*c;
-        a = rprev[RU];
-        b = rprev[RV];
-        c = rprev[RW];
-        rthis[RTUL] = surf[OE11]*a + surf[OE21]*b + surf[OE31]*c;
-        rthis[RTVL] = surf[OE12]*a + surf[OE22]*b + surf[OE32]*c;
-        rthis[RTWL] = surf[OE13]*a + surf[OE23]*b + surf[OE33]*c;
-        rthis[RPATH] = rprev[RPATH]; 
+        double x, y, z, dx, dy, dz, u, v, w;
+        boolean rayok = isNormalizedLab(dRays[k][jprev]);
+        if (!rayok)
+        {
+            System.out.println("labtovx() starting with BAAD LAB NORMALIZATION; k, jprev, j= "+k+"  "+jprev+"  "+j);
+            System.out.println("....norm error = "+getNormErrorLab(dRays[k][jprev])); 
+        }
+        
+        x  = dRays[k][jprev][RX];
+        y  = dRays[k][jprev][RY];
+        z  = dRays[k][jprev][RZ];    
+        u  = dRays[k][jprev][RU];
+        v  = dRays[k][jprev][RV];
+        w  = dRays[k][jprev][RW];            
+        // System.out.printf("labtovx input  x,y,z,u,v,w = %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f \n", x,y,z,u,v,w);             
+        
+        dx = dRays[k][jprev][RX] - surfs[j][OX];
+        dy = dRays[k][jprev][RY] - surfs[j][OY];
+        dz = dRays[k][jprev][RZ] - surfs[j][OZ];
+   
+        dRays[k][j][RTXL] = surfs[j][OE11]*dx + surfs[j][OE21]*dy + surfs[j][OE31]*dz;
+        dRays[k][j][RTYL] = surfs[j][OE12]*dx + surfs[j][OE22]*dy + surfs[j][OE32]*dz;
+        dRays[k][j][RTZL] = surfs[j][OE13]*dx + surfs[j][OE23]*dy + surfs[j][OE33]*dz;
+        
+        dRays[k][j][RTUL] = surfs[j][OE11]*u + surfs[j][OE21]*v + surfs[j][OE31]*w;
+        dRays[k][j][RTVL] = surfs[j][OE12]*u + surfs[j][OE22]*v + surfs[j][OE32]*w;
+        dRays[k][j][RTWL] = surfs[j][OE13]*u + surfs[j][OE23]*v + surfs[j][OE33]*w;
+        dRays[k][j][RPATH] = dRays[k][jprev][RPATH]; 
+        
+        x  = dRays[k][j][RTXL];
+        y  = dRays[k][j][RTYL];
+        z  = dRays[k][j][RTZL];    
+        u  = dRays[k][j][RTUL];
+        v  = dRays[k][j][RTVL];
+        w  = dRays[k][j][RTWL];          
+        // System.out.printf("labtovx output x,y,z,u,v,w = %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f \n", x,y,z,u,v,w);        
     }
 
-    static private void vxtolab(double ray[], double surf[])
-    // Coordinate frame changer, single surface.
+
+    static private void vxtolab(int k, int j)
+    // Coordinate frame changer, ray="k", single surface "j".
     // Here the OE matrix is used directly, local to lab conversion. 
     // Converts a vertex-frame ray descriptor to lab frame.
     // M.Lampton STELLAR SOFTWARE (C) 1989, 2003
     {
-        double a = ray[RTUL];
-        double b = ray[RTVL];
-        double c = ray[RTWL];
-        ray[RU] = surf[OE11]*a + surf[OE12]*b + surf[OE13]*c;
-        ray[RV] = surf[OE21]*a + surf[OE22]*b + surf[OE23]*c;
-        ray[RW] = surf[OE31]*a + surf[OE32]*b + surf[OE33]*c;
-        a = ray[RTXL];
-        b = ray[RTYL];
-        c = ray[RTZL];
-        ray[RX] = surf[OE11]*a + surf[OE12]*b + surf[OE13]*c;
-        ray[RY] = surf[OE21]*a + surf[OE22]*b + surf[OE23]*c;
-        ray[RZ] = surf[OE31]*a + surf[OE32]*b + surf[OE33]*c;
-        ray[RX] += surf[OX];
-        ray[RY] += surf[OY];
-        ray[RZ] += surf[OZ];
+        double x, y, z, u, v, w;
+        
+        boolean rayok = isNormalizedVx(dRays[k][j]);
+        if (!rayok)
+        {
+            System.out.println("vxtolab() starting with BAAD LAB NORMALIZATION; k, j= "+k+"  "+j);
+            System.out.println("....norm error = "+getNormErrorVx(dRays[k][j])); 
+        }
+        // System.out.println("vxtolab() being called; surf[OZ] = "+surf[OZ]); 
+        
+        x  = dRays[k][j][RTXL];
+        y  = dRays[k][j][RTYL];
+        z  = dRays[k][j][RTZL];    
+        u  = dRays[k][j][RTUL];
+        v  = dRays[k][j][RTVL];
+        w  = dRays[k][j][RTWL];          
+        // System.out.printf("vxtolab input  x,y,z,u,v,w = %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f \n", x,y,z,u,v,w);   
+
+        dRays[k][j][RU] = surfs[j][OE11]*u + surfs[j][OE12]*v + surfs[j][OE13]*w;
+        dRays[k][j][RV] = surfs[j][OE21]*u + surfs[j][OE22]*v + surfs[j][OE23]*w;
+        dRays[k][j][RW] = surfs[j][OE31]*u + surfs[j][OE32]*v + surfs[j][OE33]*w;
+
+        dRays[k][j][RX] = surfs[j][OE11]*x + surfs[j][OE12]*y + surfs[j][OE13]*z;
+        dRays[k][j][RY] = surfs[j][OE21]*x + surfs[j][OE22]*y + surfs[j][OE23]*z;
+        dRays[k][j][RZ] = surfs[j][OE31]*x + surfs[j][OE32]*y + surfs[j][OE33]*z;
+        
+        x = dRays[k][j][RX] += surfs[j][OX];
+        y = dRays[k][j][RY] += surfs[j][OY];
+        z = dRays[k][j][RZ] += surfs[j][OZ];
+        u = dRays[k][j][RU];
+        v = dRays[k][j][RV]; 
+        w = dRays[k][j][RW];
+        // System.out.printf("vxtolab output x,y,z,u,v,w = %8.4f %8.4f %8.4f %8.4f %8.4f %8.4f \n", x,y,z,u,v,w);  
+        rayok = isNormalizedLab(dRays[k][j]);
+        if (!rayok)
+        {
+            System.out.println("vxtolab() exitting with BAAD LAB NORMALIZATION; k, j = "+k+"  "+j);
+            System.out.println("....norm error = "+getNormErrorLab(dRays[k][j]));     
+        }    
     }
 
+    
+    static private void clobberUVW(int k, int j)
+    // used only to zero out failed redirections to blank InOut and graphic data points.
+    // Assumes that InOut, Plot2D and Plot3D skip minus zero data!
+    {
+        dRays[k][j][RTUL] = -0.0; 
+        dRays[k][j][RTVL] = -0.0;
+        dRays[k][j][RTWL] = +1.0; 
+        dRays[k][j][RU]   = -0.0;
+        dRays[k][j][RV]   = -0.0;
+        dRays[k][j][RW]   = +1.0;
+    }
+
+    static private void clobberAll(int k, int j)
+    // clears out a skipped ray surface combo.
+    {
+        dRays[k][j][RTXL] = -0.0; 
+        dRays[k][j][RTYL] = -0.0;
+        dRays[k][j][RTZL] = -0.0; 
+        dRays[k][j][RX]   = -0.0;
+        dRays[k][j][RY]   = -0.0;
+        dRays[k][j][RZ]   = -0.0;
+        dRays[k][j][RTUL] = -0.0; 
+        dRays[k][j][RTVL] = -0.0;
+        dRays[k][j][RTWL] = -0.0; 
+        dRays[k][j][RU]   = -0.0;
+        dRays[k][j][RV]   = -0.0;
+        dRays[k][j][RW]   = -0.0;
+    }
+    
+    static private void vExtendLabs(int kray)
+    // Extends lab coords of a failed ray for layout dotted indicator.
+    // Extends from howfarOK[k] to howfarOK[k]+1.
+    // Just like vPropagate() but used only for failed rays. 
+    // Extension length depends on OEJIF size metric via DMF.getOsize().
+    // Does not update ray[RPATH] nor should it. 
+    // Apply this only AFTER each ray's loop terminates with bExtend[]=true.
+    {
+        int j = howfarOK[kray];
+        String fracStr = DMF.reg.getuo(UO_LAYOUT, 39); // factory default: B4constants line 870
+        double frac = 0.01* Double.parseDouble(fracStr);  
+        double size = DMF.getOsize();
+        double dist = frac * size;
+        if (DEBUG)
+        {  
+            System.out.println("RT13.vExtendLabs() is extending LAB coords starting at howfarOK = "+j); 
+            System.out.printf("RT13.vExtendLabs() has frac, size, dist = %9.3f %9.3f %9.3f \n", frac, size, dist); 
+        }
+        dRays[kray][j+1][RX] = dRays[kray][j][RX] + dRays[kray][j][RU] * dist; 
+        dRays[kray][j+1][RY] = dRays[kray][j][RY] + dRays[kray][j][RV] * dist; 
+        dRays[kray][j+1][RZ] = dRays[kray][j][RZ] + dRays[kray][j][RW] * dist; 
+    }
+
+
+    static private void fixupLabUVW(int k)
+    {
+        int j = 0; 
+        double sign = dRays[k][j][RW] < 0 ? -1.0 : +1.0;
+        double sos = U.sqr(dRays[k][j][RU]) + U.sqr(dRays[k][j][RV]);
+        if (sos > 1.0)
+        {
+            double r = Math.sqrt(sos);
+            dRays[k][j][RU] /= r;
+            dRays[k][j][RV] /= r;
+            dRays[k][j][RW] = 0.0; 
+        }
+        else     
+            dRays[k][j][RW] = sign*Math.sqrt(1 - sos);
+        boolean rayok = isNormalizedLab(dRays[k][j]);
+        if (!rayok)
+            System.out.println("fixupLabUVW() exitting, failed lab normalization.");            
+    } 
+        
+        
 
     static private void normalizeLab(double ray[])
     // Normalizes ray components RU RV RW in lab frame
@@ -2333,18 +2541,26 @@ class RT13 implements B4constants
     }
 
 
+    static private double getNormErrorVx(double[] ray)
+    {
+        return ray[RTUL]*ray[RTUL] + ray[RTVL]*ray[RTVL] + ray[RTWL]*ray[RTWL] - 1.0; 
+    }
+    
     static private boolean isNormalizedVx(double[] ray)
     {
-        double r2 = ray[RTUL]*ray[RTUL] + ray[RTVL]*ray[RTVL] + ray[RTWL]*ray[RTWL]; 
-        double err = r2 - 1.0; 
-        return Math.abs(err) < TOL; 
+        double err = getNormErrorVx(ray); 
+        return Math.abs(err) < TOL;  
     }
-
+    
+    static private double getNormErrorLab(double[]  ray)
+    {
+       return U.sqr(ray[RU]) + U.sqr(ray[RV]) + U.sqr(ray[RW]) - 1.0;
+    }
 
     static private boolean isNormalizedLab(double[] ray)
     {
-        double err = U.sqr(ray[RU]) + U.sqr(ray[RV]) + U.sqr(ray[RW]) - 1.0;
-        return Math.abs(err) < TOL; 
+        double err = getNormErrorLab(ray);
+        return Math.abs(err) < TOL;
     }
 
 
