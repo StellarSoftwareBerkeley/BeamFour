@@ -1900,8 +1900,8 @@ class RT13 implements B4constants
     }
 
     static private int iThin(double ray[], double surf[])
-    // CoordBreak CBout output surface method
-    // Must copy previous local xyzuvw into this local surface.
+    // Jaime García @gvJaime 2019
+    // Ray tracing according to thin lens hypothesis.
     {
       double focal = surf[OFOCAL];
       int sign = (int) Math.signum(focal);
