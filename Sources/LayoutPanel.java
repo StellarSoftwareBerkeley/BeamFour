@@ -1,12 +1,15 @@
 package com.stellarsoftware.beam;
 
 import javax.swing.*;      // obtain Graphics2D features
+import java.util.Arrays;   // to list an int array jhit[] below
 
 @SuppressWarnings("serial")
 
 /**
   * Custom artwork class furnishes layout artwork to GPanel.
-  *
+  * 26 Dec 2018 A207 line 1123 eliminated negative surfaces
+  * 30 Dec 2018 A207.11 skipping negative zero Z ray points -- line 1140; 
+  *   ^^ this allows bimodals to skip surfaces leaving -0.0 there.
   *
   * Fontcode accompanies each char, and use CenterOrigin for fontXY.
   * Internal coord frame is user dimensions cube, center origin, +y=up.
@@ -100,8 +103,8 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     private char cArrayType[] = new char[MAXSURFS+1]; // 'I', 'L', 'M', else not an array.
 
 
-    //---------the surface radii----see line 416------------------
-    private double rox[];  // = new double[MAXSURFS+1];      // working radius
+    //---------the surface radii----see line 528------------------
+    private double rox[];  // = new double[MAXSURFS+1];      // working radius; see line 528
     private double roy[];  // = new double[MAXSURFS+1];      // working radius
     private double gox[];  // = new double[MAXSURFS+1];      // given outer radius, x
     private double goy[];  // = new double[MAXSURFS+1];      // given outer radius, y
@@ -137,15 +140,13 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     //---protected methods mandated by GPanel--------
     
     protected void doTechList(boolean bArtStatus) // replaces abstract "do"
-    // Called by GPanel when fresh artwork is needed:
-    // new, pan, zoom, rotate.  
+    // Called by GPanel when fresh artwork is needed: new pan, zoom, rotate.  
     // But this is not called for annotations or caret blinks.
     // For annotation, host's bitmap of TechList is blitted instead,
     // then annotation and caret are written atop the bitmap. 
     // Copyright 2006 STELLAR SOFTWARE all rights reserved
     {
         nsurfs = DMF.giFlags[ONSURFS]; 
-        ngroups = DMF.giFlags[ONGROUPS]; 
         nrays = DMF.giFlags[RNRAYS];  
         ngood = RT13.iBuildRays(true);
         int istatus = DMF.giFlags[STATUS];
@@ -486,7 +487,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
         zmax = zcenter + radius; 
 
         //----set the affines in GPanel----
-        //---and in doArt() be sure to addAffines() before drawing---
+        //---and in doFullArt() be sure to addAffines() before drawing---
         
         uxcenter = 0.5 * (hmax + hmin); // protected field of GPanel
         uycenter = 0.5 * (vmax + vmin); // protected field of GPanel
@@ -571,7 +572,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
         {
             for (int k=1; k<=nrays; k++)
             {
-                int jmax = RT13.getHowfarRay(k); 
+                int jmax = RT13.getHowfarOK(k); 
  
                 for (int j=1; j<=jmax; j++)
                   if (!bGivenOuterRadius[j])  // absentee found
@@ -699,7 +700,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     ///         8 = arrayrect    = ARRRECT
     ///         9 = connector    = CONNECT
     ///
-    /// Better design: use ArrayList which is extendable?
+    /// Better design: use ArrayList whichbase is extendable?
     /// An array can be sorted; don't know about an ArrayList. 
 
     boolean bbb[] = new boolean[MAXSORT];    // sorted foreground identifier
@@ -900,17 +901,17 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     
 /*********    
 
-    private void add2D(double x, double y, int op, int which)
+    private void add2D(double x, double y, int op, int whichbase)
     // For 2D artwork scaled with current affines, for example rulers.
     // Do not call viewelaz(). 
     {
-        addScaled(x, y, 0.0, op, which);   // GPanel service
+        addScaled(x, y, 0.0, op, whichbase);   // GPanel service
     } 
         
-    private void addRawLocal(double x, int op, int which)
+    private void addRawLocal(double x, int op, int whichbase)
     // for unscaled 2D artwork in raw pixel units, for example linewidths.
     {
-        addRaw(x, 0.0, 0.0, op, which);    // GPanel service
+        addRaw(x, 0.0, 0.0, op, whichbase);    // GPanel service
     }
         
 ***********/
@@ -928,7 +929,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
           RT13.refractLayoutShading[j] = RT13.getRefraction(j, 1); 
 
         whitebkg = "T".equals(DMF.reg.getuo(UO_LAYOUT, 15));
-        
+        // QBASE is a global constant, base of artwork; then QBATCH, QRAND, QFINISH, QANNO.
         clearList(QBASE); 
         addRaw(0., 0., 0., whitebkg ? SETWHITEBKG : SETBLACKBKG, QBASE); 
         addRaw(0., 0., 0., SETCOLOR + (whitebkg ? BLACK : WHITE), QBASE); 
@@ -961,7 +962,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
 
 
     void doSkeleton()  
-    // This is a simplified doArt(), no zsort, no rays, no shading.
+    // This is a simplified doFullArt(), no zsort, no rays, no shading.
     // Writes its quads to baseList. 
     // It is displayed only during mouse-down drag/zoom/twirl motion. 
     // Assumes we've already set rox[], roy[], nSpiderLegs[] etc.
@@ -1097,7 +1098,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
 
 
     private void doBlank()
-    // A simplified doArt() that creates a blank field.
+    // A simplified doFullArt() that creates a blank field.
     // Used when artwork is requested but cannot be generated
     {
         clearList(QBASE); 
@@ -1106,24 +1107,34 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     }
 
 
-    private boolean drawOneRay(int kray, int which)
-    // called by doArt() and by doRandomRay().
+    private boolean drawOneRay(int kray, int whichbase)
+    // called by doFullArt() and by doRandomRay().
     // Puts a ray onto any specified quadList. 
     // Returns boolean since doRandomRay() counts status. 
     // Copyright 2006 STELLAR SOFTWARE all rights reserved
-    // howfar = 1...ngroups
+    // howfar = 0 to nsurfs;
+    // can skip points having Z=-0.0 for bimodals.
+    // Table rays are plotted into the memory area QBASE
+    // Random rays are batch mode and go into QBATCH.
     {
+        // System.out.println("-----Layout has started with kray = "+kray);
+        
         boolean isGood; 
         if (kray == 0)
           isGood = RT13.bRunRandomRay();
         else
-          isGood = RT13.bGoodRay[kray];  
-        int rayerr = RT13.getStatus(kray);         // ray error status
-        int howfar = RT13.getHowfarLoop(kray);     // end or trouble spot
+          isGood = RT13.isRayOK[kray];  
+        int rayerr = RT13.getStatus(kray);  
+        boolean rrok = (rayerr == RROK); 
+        int howfarOK = RT13.getHowfarOK(kray); 
+        
+        // System.out.println("Layout starting kray = "+kray+", isGood = "+isGood+", howfarOK = "+howfarOK); 
+        // double u0 = RT13.dGetRay(kray,0,RU); 
+        // System.out.println("Layout starting kray has u0 = "+u0); 
+        
         boolean bExtend = RT13.getExtend(kray);  
         int kGuide = (kray==0) ? RT13.getGuideRay() : kray; 
-        int jsolid = bExtend ? howfar-1 : howfar; 
-        boolean rrok = (rayerr == RROK); 
+
         int icolor = (int) RT13.raystarts[kGuide][RSCOLOR]; 
         if ((icolor==WHITE) && whitebkg)
           icolor=BLACK; 
@@ -1132,41 +1143,80 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
 
         if (widthRays == 0)
           return isGood; 
+          
+        //------boil the surfaces down to the good (not-skipped) surfaces----
 
+        int jhit[] = new int[nsurfs+1]; 
+        jhit[0] = 0;           // surface zero is always one hit.
+        int nBeyondZero = 0;   // how many hits beyond zero
+        for (int j=1; j<=howfarOK; j++)
+        {
+            double Z = RT13.dGetRay(kray, j, RZ);
+            if (U.isNegZero(Z))  // skip absentee intercepts
+               continue; 
+            else
+               nBeyondZero++;
+               jhit[nBeyondZero] = j;  // gather good intercepts for artwork
+        }
+        int jsolid = jhit[nBeyondZero]; 
+        if (DEBUG)
+           System.out.println("-----Layout jhit[] = " + Arrays.toString(jhit)); 
+        
+        // DON'T EXIT THERE MIGHT BE JUST ONE HIT (NO SOLID) BUT COULD STILL HAVE AN EXTEND
+        // nSystem.out.println("LayoutPanel finds jsolid = "+jsolid); 
+
+               
         //------now draw this ray------------
 
-        addRaw(0., 0., 0., COMMENTRAY, which); 
-        addRaw(widthRays, 0., 0., SETSOLIDLINE, which); 
-        addRaw(0., 0., 0., SETCOLOR+icolor, which); 
+        addRaw(0., 0., 0., COMMENTRAY, whichbase); 
+        addRaw(widthRays, 0., 0., SETSOLIDLINE, whichbase); 
+        addRaw(0., 0., 0., SETCOLOR+icolor, whichbase); 
         double xyz[] = {0., 0., 0.}; 
-        if (jsolid > 0)  // solid part, propagation OK
+        if (nBeyondZero > 0)  // solid part, propagation OK
         {
-            for (int j=0; j<=jsolid; j++)
+            if (DEBUG)
+               System.out.println("-----Layout is starting kray = "+kray);
+            for (int h=0; h<=nBeyondZero; h++)
             {
+
+               int j = jhit[h]; 
                xyz[0] = RT13.dGetRay(kray, j, RX);
                xyz[1] = RT13.dGetRay(kray, j, RY); 
                xyz[2] = RT13.dGetRay(kray, j, RZ); 
+               if (DEBUG)
+                  System.out.printf("-----Layout is adding hit, jsurf, x = %6d %6d %12.6f \n", h, j, xyz[0]); 
+                   
                viewelaz(xyz);
-               int itype = (int) RT13.dGetSurf(OTYPE,j); 
+               int itype = (int) RT13.dGetSurfParm(OTYPE,j); 
                boolean bCBIN  = (OTCBIN  == itype); 
                boolean bCBOUT = (OTCBOUT == itype); 
                int op = ((j==0 || bCBOUT) ? MOVETO : (j==jsolid || bCBIN) ? STROKE : PATHTO);
-               addScaled(xyz, op, which);
+               addScaled(xyz, op, whichbase);
             }
         }   
         if (bExtend)
         {
-            addRaw(widthRays, 0., 0., SETDOTTEDLINE, which); 
+            // Although the ray trace ends at howfar, RT13.bRunOneRay() used vExtendLabs() to
+            // gain another surface at howfar+1 that has the extension information. 
+            // This extension is hidden by InOut so no one will be the wiser.  Heh heh. 
+            // The extension numbers are handled by RT13
+            addRaw(widthRays, 0., 0., SETDOTTEDLINE, whichbase); 
+            
+            if (DEBUG)
+               System.out.println("Layout extending from jsolid = "+jsolid);
             xyz[0] = RT13.dGetRay(kray, jsolid, RX);
             xyz[1] = RT13.dGetRay(kray, jsolid, RY); 
             xyz[2] = RT13.dGetRay(kray, jsolid, RZ);
             viewelaz(xyz);  
-            addScaled(xyz, MOVETO, which);
+            addScaled(xyz, MOVETO, whichbase);
+            
+            if (DEBUG)
+               System.out.println("Layout extending to jsolid+1 = "+(jsolid+1)); 
             xyz[0] = RT13.dGetRay(kray, jsolid+1, RX);
             xyz[1] = RT13.dGetRay(kray, jsolid+1, RY); 
             xyz[2] = RT13.dGetRay(kray, jsolid+1, RZ);
             viewelaz(xyz);  
-            addScaled(xyz, STROKE, which);
+            addScaled(xyz, STROKE, whichbase);
         }
         return isGood;          
     }
@@ -1386,7 +1436,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
     //--------putFunctions are for drawing individual parts------------
     //-----these assume we've already set rox[], roy[], nSpiderLegs[] etc----
 
-    void putSpiderHole(int j, int ihole, boolean bWholeHole, int which)
+    void putSpiderHole(int j, int ihole, boolean bWholeHole, int whichbase)
     // j = surface number, 1....nsurfs
     // ihole = hole number 0...nholes-1
     // one four-arc hole is drawn per spider leg. 
@@ -1433,9 +1483,9 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
             if (bWholeHole)
-              addScaled(xyz, (i==0) ? MOVETO : PATHTO, which);
+              addScaled(xyz, (i==0) ? MOVETO : PATHTO, whichbase);
             else
-              addScaled(xyz, (i==0) ? MOVETO : (i<snsegs) ? PATHTO : STROKE, which); 
+              addScaled(xyz, (i==0) ? MOVETO : (i<snsegs) ? PATHTO : STROKE, whichbase); 
         }
 
         if (bWholeHole)
@@ -1451,7 +1501,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                 xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
                 vx2lab(xyz, RT13.surfs[j]); 
                 viewelaz(xyz); 
-                addScaled(xyz, PATHTO, which); 
+                addScaled(xyz, PATHTO, whichbase); 
             }
 
             if (dInner > U.TOL)               // inner periphery
@@ -1465,7 +1515,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                   xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
                   vx2lab(xyz, RT13.surfs[j]); 
                   viewelaz(xyz); 
-                  addScaled(xyz, PATHTO, which);
+                  addScaled(xyz, PATHTO, whichbase);
               }
 
             a = aThisLeg + aOuter;           // outgoing leg side
@@ -1478,7 +1528,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                 xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
                 vx2lab(xyz, RT13.surfs[j]); 
                 viewelaz(xyz); 
-                addScaled(xyz, (i<nsegs) ? PATHTO : STROKE, which ); 
+                addScaled(xyz, (i<nsegs) ? PATHTO : STROKE, whichbase ); 
             }
         }
     } //------------end of putSpiderHole()---------------
@@ -1486,7 +1536,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
 
 
 
-    void putIrisArrayHole(int j, int nh, int which)  // nh=hole number
+    void putIrisArrayHole(int j, int nh, int whichbase)  // nh=hole number
     {
         double diax = RT13.surfs[j][OODIAX]; 
         int nx = (int) RT13.surfs[j][ONARRAYX]; 
@@ -1524,14 +1574,14 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                 vx2lab(xyz, RT13.surfs[j]); 
                 viewelaz(xyz); 
                 int op = (i==0) ? MOVETO : (i==nsegs) ? STROKE : PATHTO;
-                addScaled(xyz, op, which);
+                addScaled(xyz, op, whichbase);
             }
         }
     } //--------------end of putIrisArrayHole()------------------
 
 
 
-    void putRectArrayElement(int j, int nh, int which)  // j=surface, nh=element 0..n-1
+    void putRectArrayElement(int j, int nh, int whichbase)  // j=surface, nh=element 0..n-1
     {
         double diax = RT13.surfs[j][OODIAX]; 
         int nx = (int) RT13.surfs[j][ONARRAYX]; 
@@ -1569,7 +1619,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                 vx2lab(xyz, RT13.surfs[j]); 
                 viewelaz(xyz); 
                 int op = (i==0) ? MOVETO : (i==nsegs) ? STROKE : PATHTO;
-                addScaled(xyz, op, which);
+                addScaled(xyz, op, whichbase);
             }
         }
     } //--------------end of putRectArrayElement()------------------
@@ -1579,7 +1629,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
 
     //----Artwork for three arcs: radial, outer, inner------
 
-    void putRadialArc(int j, int t, int which)
+    void putRadialArc(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iq = t%4; 
@@ -1609,7 +1659,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                         vx2lab(xyz, RT13.surfs[j]); 
                         viewelaz(xyz); 
                         int op = (i==0) ? MOVETO : STROKE;    
-                        addScaled(xyz, op, which);
+                        addScaled(xyz, op, whichbase);
                     }
                 }
                 if (bGivenOuterRadius[j]) // outer iris beauty marks
@@ -1624,7 +1674,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                         vx2lab(xyz, RT13.surfs[j]); 
                         viewelaz(xyz); 
                         int op = (i==0) ? MOVETO : STROKE;      
-                        addScaled(xyz, op, which);
+                        addScaled(xyz, op, whichbase);
                     }
                 }
             }
@@ -1640,13 +1690,13 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
                 vx2lab(xyz, RT13.surfs[j]); 
                 viewelaz(xyz); 
                 int op = (i==0) ? MOVETO : i==nsegs ? STROKE : PATHTO; 
-                addScaled(xyz, op, which);
+                addScaled(xyz, op, whichbase);
             }
         }
     }
  
 
-    void putOuterArc(int j, int t, int which)
+    void putOuterArc(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iq = t%4; 
@@ -1666,12 +1716,12 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
             int op = i==0 ? MOVETO : i==nsegs ? STROKE : PATHTO;
-            addScaled(xyz, op, which);
+            addScaled(xyz, op, whichbase);
         }
     }
 
 
-    void putInnerArc(int j, int t, int which)
+    void putInnerArc(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iq = t%4; 
@@ -1691,14 +1741,14 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
             int op = i==0 ? MOVETO : i==nsegs ? STROKE : PATHTO;
-            addScaled(xyz, op, which);
+            addScaled(xyz, op, whichbase);
         }
     }
 
 
     //---------three shadings: radial, outer, inner---------
 
-    void putRadialShade(int j, int t, int which)
+    void putRadialShade(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iq = t%4;
@@ -1712,7 +1762,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, MOVETO, which); 
+            addScaled(xyz, MOVETO, whichbase); 
 
             // second corner...
             xyz[0] = radix[j-1][iq] + i*(radox[j-1][iq]-radix[j-1][iq])/nsegs; 
@@ -1722,7 +1772,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // third corner...
             xyz[0] = radix[j-1][iq] + (i+1)*(radox[j-1][iq]-radix[j-1][iq])/nsegs; 
@@ -1732,7 +1782,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // fourth corner...
             xyz[0] = radix[j][iq] + (i+1)*(radox[j][iq]-radix[j][iq])/nsegs; 
@@ -1742,11 +1792,11 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, FILL, which); 
+            addScaled(xyz, FILL, whichbase); 
         } 
     }
 
-    void putConnector(int j, int t, int which)
+    void putConnector(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iq = t%4;
@@ -1759,7 +1809,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
         xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
         vx2lab(xyz, RT13.surfs[j]); 
         viewelaz(xyz); 
-        addScaled(xyz, MOVETO, which); 
+        addScaled(xyz, MOVETO, whichbase); 
 
         // at surface j-1 ...
         xyz[0] = radox[j-1][iq];
@@ -1769,13 +1819,13 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
         xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
         vx2lab(xyz, RT13.surfs[j-1]); 
         viewelaz(xyz); 
-        addScaled(xyz, STROKE, which); 
+        addScaled(xyz, STROKE, whichbase); 
     }
 
 
 
 
-    void putOuterShade(int j, int t, int which)
+    void putOuterShade(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iform = (int) RT13.surfs[j][OFORM];
@@ -1793,7 +1843,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, MOVETO, which); 
+            addScaled(xyz, MOVETO, whichbase); 
 
             // second corner...
             xyz[0] = rox[j-1] * cc(bPRect, i) * arcx[iq]; 
@@ -1803,7 +1853,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // third corner...
             xyz[0] = rox[j-1] * cc(bPRect, i+1) * arcx[iq]; 
@@ -1813,7 +1863,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // fourth corner...
             xyz[0] = rox[j] * cc(bORect, i+1) * arcx[iq]; 
@@ -1823,12 +1873,12 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, FILL, which);
+            addScaled(xyz, FILL, whichbase);
         }
     }
 
 
-    void putInnerShade(int j, int t, int which)
+    void putInnerShade(int j, int t, int whichbase)
     {
         double xyz[] = new double[3]; 
         int iform = (int) RT13.surfs[j][OFORM];
@@ -1846,7 +1896,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, MOVETO, which); 
+            addScaled(xyz, MOVETO, whichbase); 
 
             // second corner...
             xyz[0] = gix[j-1] * cc(bPRect, i) * arcx[iq]; 
@@ -1856,7 +1906,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // third corner...
             xyz[0] = gix[j-1] * cc(bPRect, i+1) * arcx[iq]; 
@@ -1866,7 +1916,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j-1]); 
             vx2lab(xyz, RT13.surfs[j-1]); 
             viewelaz(xyz); 
-            addScaled(xyz, PATHTO, which); 
+            addScaled(xyz, PATHTO, whichbase); 
 
             // fourth corner...
             xyz[0] = gix[j] * cc(bIRect, i+1) * arcx[iq]; 
@@ -1876,7 +1926,7 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
             xyz[2] = Z.dGetZsurf(xyz[0], xyz[1], RT13.surfs[j]); 
             vx2lab(xyz, RT13.surfs[j]); 
             viewelaz(xyz); 
-            addScaled(xyz, FILL, which);
+            addScaled(xyz, FILL, whichbase);
         }
     }
 
@@ -2155,27 +2205,27 @@ public class LayoutPanel extends GPanel   // implements B4constants via GPanel
         return 0;
     }
 
-    String getAxisLabel(int whichAxis)
-    /// use whichAxis=0 for hor axis label
-    /// use whichAxis=1 for vert axis label
+    String getAxisLabel(int whichbaseAxis)
+    /// use whichbaseAxis=0 for hor axis label
+    /// use whichbaseAxis=1 for vert axis label
     {
         double labx[] = {1, 0, 0};
         viewelaz(labx); 
-        if (labx[whichAxis] > 0.998)
+        if (labx[whichbaseAxis] > 0.998)
           return "+X";  
-        if (labx[whichAxis] < -0.998)
+        if (labx[whichbaseAxis] < -0.998)
           return "-X"; 
         double laby[] = {0, 1, 0}; 
         viewelaz(laby); 
-        if (laby[whichAxis] > 0.998)
+        if (laby[whichbaseAxis] > 0.998)
           return "+Y"; 
-        if (laby[whichAxis] < -0.998)
+        if (laby[whichbaseAxis] < -0.998)
           return "-Y"; 
         double labz[] = {0, 0, 1}; 
         viewelaz(labz); 
-        if (labz[whichAxis] > 0.998)
+        if (labz[whichbaseAxis] > 0.998)
           return "+Z"; 
-        if (labz[whichAxis] < -0.998)
+        if (labz[whichbaseAxis] < -0.998)
           return "-Z"; 
         return "  "; 
     }

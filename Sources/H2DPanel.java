@@ -8,7 +8,7 @@ import java.io.*;          // Save Data
 /**
   * H2DPanel extends GPanel, draws 2D binned ray histogram.
   * Random ray responder is installed.
-  *
+  * A207: eliminates groups
   * 
   * Because the x, y, and z scaling factors are different,
   * integer bins & counts are scaled to a unit cube for display.
@@ -79,7 +79,6 @@ public class H2DPanel extends GPanel
     // Called by GPanel for artwork: new, pan, zoom, & random ray group.
     {
         nsurfs = DMF.giFlags[ONSURFS];                 // always needed.
-        ngroups = DMF.giFlags[ONGROUPS];               // always needed.
         nrays = DMF.giFlags[RNRAYS];                   // always needed.
         ngood = RT13.iBuildRays(true);
                 
@@ -89,15 +88,7 @@ public class H2DPanel extends GPanel
         if (warn.length() > 0)
           return; 
 
-        //---see if group assignments have changed----
-        boolean bChanged = false; 
-        for (int j=0; j<MAXSURFS; j++)
-          if (prevGroups[j] != RT13.group[j])
-          {
-              prevGroups[j] = RT13.group[j]; 
-              bChanged = true; 
-          }
-        if ((npSurfs != nsurfs) || (npRays != nrays) || bPleaseParseUO || bChanged)
+        if ((npSurfs != nsurfs) || (npRays != nrays) || bPleaseParseUO)
         {
             doParse();     
             npSurfs = nsurfs; 
@@ -195,17 +186,16 @@ public class H2DPanel extends GPanel
     // Local variables shadow H2D fields.
     // First line of defense, must never crash. 
     {
-        ngroups = DMF.giFlags[ONGROUPS]; 
         String hst = DMF.reg.getuo(UO_2D, 2); 
         int hop = REJIF.getCombinedRayFieldOp(hst); 
-        int hsurf = RT13.getGroupNum(hop); 
+        int hsurf = RT13.getSurfNum(hop); 
         int hattr = RT13.getAttrNum(hop); 
         if ((hsurf<0) || (hattr<0) || (hattr>RNATTRIBS))
           return "H var unknown:  "+hst; 
 
         String vst = DMF.reg.getuo(UO_2D, 3); 
         int vop = REJIF.getCombinedRayFieldOp(vst); 
-        int vsurf = RT13.getGroupNum(vop); 
+        int vsurf = RT13.getSurfNum(vop); 
          int vattr = RT13.getAttrNum(vop); 
         if ((vsurf<0) || (vattr<0) || (vattr>RNATTRIBS))
           return "V var unknown:  "+vst; 
@@ -225,12 +215,12 @@ public class H2DPanel extends GPanel
 
         hst = DMF.reg.getuo(UO_2D, 2); 
         int hop = REJIF.getCombinedRayFieldOp(hst); 
-        hsurf = RT13.getGroupNum(hop); 
+        hsurf = RT13.getSurfNum(hop); 
         hattr = RT13.getAttrNum(hop); 
 
         vst = DMF.reg.getuo(UO_2D, 3); 
         int vop = REJIF.getCombinedRayFieldOp(vst); 
-        vsurf = RT13.getGroupNum(vop); 
+        vsurf = RT13.getSurfNum(vop); 
         vattr = RT13.getAttrNum(vop); 
 
         nhbins = U.parseInt(DMF.reg.getuo(UO_2D, 4));  
@@ -260,7 +250,7 @@ public class H2DPanel extends GPanel
         RT13.iBuildRays(true); 
         for (int kray=1; kray<=nrays; kray++)
         {
-            if (RT13.bGoodRay[kray])
+            if (RT13.isRayOK[kray])
             {
                 double h = RT13.dGetRay(kray, hsurf, hattr); 
                 double v = RT13.dGetRay(kray, vsurf, vattr); 
@@ -387,7 +377,7 @@ public class H2DPanel extends GPanel
           for (int j=0; j<nvbins; j++)
             histo[i][j] = 0; 
         for (int kray=1; kray<=nrays; kray++)
-          if (RT13.bGoodRay[kray])
+          if (RT13.isRayOK[kray])
             addRayToHisto(kray); 
 
         //  ...and get histopeak and dhisto[][]
@@ -435,7 +425,7 @@ public class H2DPanel extends GPanel
 
     private void doArt()
     {
-        ngroups = DMF.giFlags[ONGROUPS];
+        nsurfs = DMF.giFlags[ONSURFS];
         nrays = DMF.giFlags[RNRAYS];
         double xyz[] = new double[3]; 
 

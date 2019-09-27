@@ -63,7 +63,7 @@ class MEJIF extends EJIF
         if (nglasses < 1)
           return; 
 
-        /////////////// initialize the nongeneric output data //////////////
+        /////////////// initialize the output data //////////////
 
         DMF.giFlags[MNWAVES] = 0;
         DMF.giFlags[MSYNTAXERR] = 0; 
@@ -80,15 +80,21 @@ class MEJIF extends EJIF
 
         //////////// mwaves[1...] begin at field=1, line=1 //////
 
-        for (int f=1; f<nfields; f++)  // skip field zero
-          mwaves[f] = getFieldTrim(f, 1); 
+        for (int f=1; f<nfields; f++)  // skip field zero it is not a wavelength field
+        {
+             mwaves[f] = getFieldTrim(f, 1); 
+             // System.out.println("MEJIF finds wave name = "+mwaves[f]);
+        }
         DMF.giFlags[MNWAVES] = nfields-1; 
 
 
         //////// mglasses[1...]  begin at record=1, line=3 /////
 
         for (int irec=1; irec<=DMF.giFlags[MNGLASSES]; irec++)
-          mglasses[irec] = getFieldTrim(0, irec+2); 
+        {
+            mglasses[irec] = getFieldTrim(0, irec+2); 
+            // System.out.println("MEJIF finds glass name = "+mglasses[irec]);
+        } 
 
         //////// parse the data records into RT13.media[][] //////
 
@@ -97,7 +103,8 @@ class MEJIF extends EJIF
         {
             for (int irec=1; irec<=DMF.giFlags[MNGLASSES]; irec++)
             {
-                RT13.media[irec][f] = getFieldDouble(f, 2+irec); 
+                double n = RT13.media[irec][f] = getFieldDouble(f, 2+irec); 
+                // System.out.printf("MEJIF refraction at f,g= %3d %3d %8.5f \n", f, irec, n);
                 if (Double.isNaN(RT13.media[irec][f])) 
                 {
                     badline = irec+2; 
@@ -113,6 +120,8 @@ class MEJIF extends EJIF
               break; 
         }
         DMF.giFlags[MSYNTAXERR] = msyntaxerr; 
+        // System.out.println("MEJIF finds nwaves = " + DMF.giFlags[MNWAVES]);
+        // System.out.println("MEJIF finds nglasses = " + DMF.giFlags[MNGLASSES]); 
     } // end of parse(). 
 }
 

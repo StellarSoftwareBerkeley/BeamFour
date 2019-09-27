@@ -15,7 +15,7 @@ import java.util.*;          // StringTokenizer
   *  
   *  Options extends JMenu, provides an options system using strings.
   *
-  *  ALL OPTION STRINGS ARE DEFINED IN CONSTANTS.JAVA not here. 
+  *  ALL OPTION STRINGS ARE DEFINED IN B4constants.java  not here. 
   *
   *  ActionListeners implement the dialogs to help separate GUI from code.
   *  Both Registry and Options implement Constants.
@@ -58,7 +58,18 @@ class Options extends JMenu implements B4constants
     {
         super(menuname);  
         owner = gjf; 
-
+        
+        JMenuItem newfileItem = new JMenuItem("NewFile");
+        newfileItem.addActionListener(new
+          ActionListener()
+          {
+              public void actionPerformed(ActionEvent ae)
+              {
+                  doNewfileDialog(owner); 
+              }  
+          });
+        this.add(newfileItem); 
+          
         JMenuItem inoutItem = new JMenuItem("InOut"); 
         inoutItem.addActionListener(new
           ActionListener()
@@ -342,7 +353,35 @@ class Options extends JMenu implements B4constants
 
 
     //------private dialog methods; each uses JOptionPane--------------
-
+    //------private dialog methods; each uses JOptionPane--------------
+    //------private dialog methods; each uses JOptionPane--------------
+    //------private dialog methods; each uses JOptionPane--------------
+    //------private dialog methods; each uses JOptionPane--------------
+    //------private dialog methods; each uses JOptionPane--------------
+    //------private dialog methods; each uses JOptionPane--------------
+    
+    void doNewfileDialog(JFrame frame)
+    // allows user to choose NewFile skeleton parameters
+    {
+        LabelDataBox nrecordsBox = new LabelDataBox(UO_NEWFILE, 0, NCHARS);
+        LabelDataBox nfieldsBox = new LabelDataBox(UO_NEWFILE, 1, NCHARS); 
+        LabelDataBox nwidthBox = new LabelDataBox(UO_NEWFILE, 2, NCHARS); 
+        
+        int result = JOptionPane.showOptionDialog(frame, 
+           new Object[] {nrecordsBox, nfieldsBox, nwidthBox},
+           "New File Options",
+           JOptionPane.OK_CANCEL_OPTION,
+           JOptionPane.PLAIN_MESSAGE,
+           null, null, null); 
+        if (result == JOptionPane.OK_OPTION)
+        {
+            DMF.reg.putuo(UO_NEWFILE, 0, nrecordsBox.getText());
+            DMF.reg.putuo(UO_NEWFILE, 1, nfieldsBox.getText());            
+            DMF.reg.putuo(UO_NEWFILE, 2, nwidthBox.getText());
+        }
+    }   
+            
+                  
     void doInOutDialog(JFrame frame)
     {
         LabelBitBox rms = new LabelBitBox(UO_IO, 0); 
@@ -368,6 +407,7 @@ class Options extends JMenu implements B4constants
         LabelDataBox el = new LabelDataBox(UO_LAYOUT, 0, NCHARS); 
         LabelDataBox az = new LabelDataBox(UO_LAYOUT, 1, NCHARS); 
         LabelDataBox ar = new LabelDataBox(UO_LAYOUT, 3, NCHARS); 
+        LabelDataBox dx = new LabelDataBox(UO_LAYOUT, 39, NCHARS); // RT13 line 2500
         LabelBitBox  sticky = new LabelBitBox(UO_LAYOUT, 2); 
         
         String title1 = "Which axis is to point upward?";
@@ -390,7 +430,7 @@ class Options extends JMenu implements B4constants
                                   UO_LAYOUT, 15, frame); 
                                   
         int result = JOptionPane.showOptionDialog(frame,
-           new Object[] {el, az, ar, sticky, shading, connect, 
+           new Object[] {el, az, ar, dx, sticky, shading, connect, 
                          retrovis, vert, ax, rb, db,  bhsb}, 
            "Layout Options", 
            JOptionPane.OK_CANCEL_OPTION, 
@@ -403,6 +443,7 @@ class Options extends JMenu implements B4constants
             DMF.reg.putuo(UO_LAYOUT, 1, az.getText()); 
             DMF.reg.putuo(UO_LAYOUT, 2, sticky.isSelected() ? "T" : "F"); 
             DMF.reg.putuo(UO_LAYOUT, 3, ar.getText()); 
+            DMF.reg.putuo(UO_LAYOUT, 39, dx.getText()); 
             for (int i=0; i<6; i++)
               DMF.reg.putuo(UO_LAYOUT, 4+i, vert.isSelected(i) ? "T" : "F"); 
             for (int i=0; i<5; i++)
@@ -470,14 +511,13 @@ class Options extends JMenu implements B4constants
         LabelDataBox wave = new LabelDataBox(UO_PLOT2, 4, NCHARS); 
         BorVertRadioBox spot = new BorVertRadioBox("Dot style", UO_PLOT2, 5, 4); 
         JLabel blank = new JLabel(" "); 
-        BorVertRadioBox rays = new BorVertRadioBox("Which rays", UO_PLOT2, 9, 2); 
-        LabelDataBox other = new LabelDataBox(UO_PLOT2, 11, 3); 
-        LabelBitBox black = new LabelBitBox(UO_PLOT2, 12); 
+        BorVertRadioBox rays = new BorVertRadioBox("Which rays", UO_PLOT2, 9, 2); // 9=Complete; 10=Sufficient
+        LabelBitBox black = new LabelBitBox(UO_PLOT2, 11); 
 
         int result = JOptionPane.showOptionDialog(frame,
            new Object[] {hvar, hran, hlabel, hblank, 
                          vvar, vran, vlabel, vblank, 
-                         wave, spot, blank, rays, other, black}, 
+                         wave, spot, blank, rays, black}, 
            "Plot2Dim Options", 
            JOptionPane.OK_CANCEL_OPTION, 
            JOptionPane.PLAIN_MESSAGE,
@@ -497,8 +537,7 @@ class Options extends JMenu implements B4constants
             for (int i=0; i<2; i++)
               DMF.reg.putuo(UO_PLOT2, 9+i, rays.isSelected(i) ? "T" : "F"); 
 
-            DMF.reg.putuo(UO_PLOT2, 11, other.getText()); 
-            DMF.reg.putuo(UO_PLOT2, 12, black.isSelected() ? "T" : "F"); 
+            DMF.reg.putuo(UO_PLOT2, 11, black.isSelected() ? "T" : "F"); 
 
             updateAllInstances("Plot2Dim"); 
         }
@@ -633,18 +672,18 @@ class Options extends JMenu implements B4constants
 
     void doPlot3Dialog(JFrame frame)
     {
-        LabelDataBox avar = new LabelDataBox(UO_PLOT3, 0, NCHARS); 
-        LabelDataBox aran = new LabelDataBox(UO_PLOT3, 1, NCHARS); 
-        LabelDataBox bvar = new LabelDataBox(UO_PLOT3, 2, NCHARS); 
-        LabelDataBox bran = new LabelDataBox(UO_PLOT3, 3, NCHARS); 
-        LabelDataBox cvar = new LabelDataBox(UO_PLOT3, 4, NCHARS); 
-        LabelDataBox cran = new LabelDataBox(UO_PLOT3, 5, NCHARS); 
+        LabelDataBox avar = new LabelDataBox(UO_PLOT3, 0, NCHARS); // A var
+        LabelDataBox aran = new LabelDataBox(UO_PLOT3, 1, NCHARS); // A span
+        LabelDataBox bvar = new LabelDataBox(UO_PLOT3, 2, NCHARS); // B var
+        LabelDataBox bran = new LabelDataBox(UO_PLOT3, 3, NCHARS); // B span
+        LabelDataBox cvar = new LabelDataBox(UO_PLOT3, 4, NCHARS); // C var
+        LabelDataBox cran = new LabelDataBox(UO_PLOT3, 5, NCHARS); // C span
         LabelBox clabel = new LabelBox("Set any span=0.0 for auto scaling"); 
-        LabelDataBox elev = new LabelDataBox(UO_PLOT3, 6, NCHARS); 
-        LabelDataBox azim = new LabelDataBox(UO_PLOT3, 7, NCHARS); 
-        LabelDataBox wave = new LabelDataBox(UO_PLOT3, 8, NCHARS); 
-        BorHorizRadioBox spot = new BorHorizRadioBox("Dot style", UO_PLOT3, 9, 4); 
-        BorVertRadioBox rays = new BorVertRadioBox("Which rays", UO_PLOT3, 13, 2);  
+        LabelDataBox elev = new LabelDataBox(UO_PLOT3, 6, NCHARS); // elev
+        LabelDataBox azim = new LabelDataBox(UO_PLOT3, 7, NCHARS); // azim
+        LabelDataBox wave = new LabelDataBox(UO_PLOT3, 8, NCHARS); // wavel
+        BorHorizRadioBox spot = new BorHorizRadioBox("Dot style", UO_PLOT3, 9, 4); // 9,10,11,12
+        BorVertRadioBox rays = new BorVertRadioBox("Which rays", UO_PLOT3, 13, 2); // 13=Complete, 14=Sufficient 
         BorHorizStereoBox bhsb = new BorHorizStereoBox("Format", UO_PLOT3, 15, frame); 
 
         int result = JOptionPane.showOptionDialog(frame,
@@ -1146,7 +1185,9 @@ class Options extends JMenu implements B4constants
             //// now try putting the coordinates into place
 
             int errcode = iPut1Drays(igoal, iwhich, dCenter, dSpan, nCount, istartrow); 
-            if (errcode != 0)
+            if (errcode < 0)
+                JOptionPane.showMessageDialog(frame, "Too many rays");             
+            if (errcode > 0)
             {
                 String w[] = {"X", "Y", "Z", "U", "V", "W"}; 
                 char c = (igoal==0) ? '0' : 'g'; 
@@ -1245,7 +1286,11 @@ class Options extends JMenu implements B4constants
             
             int q = iPutRectRays(igoal, iwhich, dCenter1, dSpan1, nCount1, 
                       dCenter2, dSpan2, nCount2, istartrow); 
-            if (q != 0)
+                      
+            if (q < 0)
+                JOptionPane.showMessageDialog(frame, "Too many rays requested"); 
+                
+            if (q > 0)
             {
                 String w1[] = {"X",   "X",  "Y",  "U",   "U",   "V"}; 
                 String w2[] = {",Y", ",Z",  ",Z", ",V",  ",W",  ",W"}; 
@@ -1287,7 +1332,8 @@ class Options extends JMenu implements B4constants
         LabelDataBox off2 = new LabelDataBox(UO_2DCRAY, 7, NCHARS); 
         LabelDataBox radius = new LabelDataBox(UO_2DCRAY, 8, NCHARS); 
         String s3 = "How many concentric circles?";
-        BorderedHexBox bhb = new BorderedHexBox(s3, UO_2DCRAY, 9, 17, 1, frame); 
+        // note: 17 circles = 919 rays; 34 rings = 3571 rays.
+        BorderedHexBox bhb = new BorderedHexBox(s3, UO_2DCRAY, 9, MAXRINGS, 1, frame); 
         JLabel blank = new JLabel(" "); 
         LabelDataBox start = new LabelDataBox(UO_2DCRAY, 10, NCHARS);
 
@@ -1376,7 +1422,8 @@ class Options extends JMenu implements B4constants
         LabelDataBox radius = new LabelDataBox(UO_2DCGAUS, 8, NCHARS); 
 
         String s3 = "How many concentric circles?";
-        BorderedHexBox bhb = new BorderedHexBox(s3, UO_2DCGAUS, 9, 17, 0, frame); 
+        // note: 17 circles = 919 rays; 34 rings = 3571 rays.
+        BorderedHexBox bhb = new BorderedHexBox(s3, UO_2DCGAUS, 9, MAXRINGS, 0, frame); 
         JLabel blank = new JLabel(" "); 
         LabelDataBox start = new LabelDataBox(UO_2DCGAUS, 10, NCHARS); 
 
@@ -1482,6 +1529,8 @@ class Options extends JMenu implements B4constants
     // w chooses which coordinate: x,y,z,u,v,w = 0...5
     {
         int icoord[] = {RX, RY, RZ, RU, RV, RW}; 
+        if (nrays >= MAXRAYS)
+           return -1; 
         if ((w < 0) || (w > 5))
           return 1; 
         int i1 = icoord[w]; 
@@ -1533,6 +1582,10 @@ class Options extends JMenu implements B4constants
     // Used by doRayRectDialog() to make a rectangular ray pattern. 
     // g=1: goals;  g=0: raystarts
     {
+        int nrays = n1*n2; 
+        if (nrays >= MAXRAYS)
+            return -1;
+            
         int icoord1[] = {RX, RX, RY, RU, RU, RV}; 
         int icoord2[] = {RY, RZ, RZ, RV, RW, RW}; 
         if ((w < 0) || (w > 5))
@@ -1545,9 +1598,9 @@ class Options extends JMenu implements B4constants
         if (redit == null)
           return 2; 
 
-        int nrays = n1*n2; 
-        if ((n1<1) || (n2<1) || (nrays>999))
+        if ((n1<1) || (n2<1))
           return 3; 
+
         if ((dS1<=0.0) || (dS2<=0.0))
           return 4; 
        
@@ -1605,6 +1658,7 @@ class Options extends JMenu implements B4constants
                                double d2, double R, int istart)
     // Used by doRayCircDialog() to make circular ray patterns. 
     // g=1: goals;  g=0: raystarts
+    // note: MAXRAYS is enforced via host NRINGS selector
     {
         int icoord1[] = {RX, RX, RY, RU, RU, RV}; 
         int icoord2[] = {RY, RZ, RZ, RV, RW, RW}; 
@@ -1618,8 +1672,6 @@ class Options extends JMenu implements B4constants
         if (redit == null)
           return 2; 
 
-        if ((ncircles<1) || (ncircles>17))
-          return 3; 
         if (R<=0.0)
           return 4; 
        
@@ -1627,7 +1679,6 @@ class Options extends JMenu implements B4constants
         {
             f1 = REJIF.rI2F[i1]; 
             f2 = REJIF.rI2F[i2]; 
-
         }
         else                         // ray goal
         {
@@ -1683,6 +1734,7 @@ class Options extends JMenu implements B4constants
                                double d2, double R, int istart)
     // Used by doRayGausDialog() to make circular Gaussian ray patterns. 
     // g=1: goals;  g=0: raystarts
+    // note: MAXRAYS is enforced via host MAXRINGS
     {
         int icoord1[] = {RX, RX, RY, RU, RU, RV}; 
         int icoord2[] = {RY, RZ, RZ, RV, RW, RW}; 
@@ -1696,8 +1748,6 @@ class Options extends JMenu implements B4constants
         if (redit == null)
           return 2; 
 
-        if ((ncircles<1) || (ncircles>17))
-          return 3; 
         if ((R <= 0.0))
           return 4; 
        

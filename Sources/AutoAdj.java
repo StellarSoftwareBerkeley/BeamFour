@@ -6,7 +6,7 @@ import javax.swing.*;
 
 
 /** AutoAdj.java
-  *
+  * A207: eliminated groups
   * class LMadj is at the bottom of this file. 
   * A190, Nov 2015: introducing weights.
   * @author: M.Lampton (c) 2003..2006 STELLAR SOFTWARE all rights reserved.
@@ -22,7 +22,7 @@ class AdjHost implements B4constants
     //----------parallel with InOut-------------
     private OEJIF optEditor = null; 
     private REJIF rayEditor = null; 
-    private int nsurfs=0, ngroups=0, nrays=0, onfields=0, rnfields=0;
+    private int nsurfs=0, nrays=0, onfields=0, rnfields=0;
     private int npts, nadj=0, onadj=0, rnadj=0, ngood=0, autongoals=0; 
     private boolean bWFE=false; 
 
@@ -58,11 +58,10 @@ class AdjHost implements B4constants
         rayEditor.doStashForUndo(); 
         
         nsurfs = DMF.giFlags[ONSURFS]; 
-        ngroups = DMF.giFlags[ONGROUPS]; 
         onfields = DMF.giFlags[ONFIELDS];  // fields per optic.
         nrays = DMF.giFlags[RNRAYS]; 
         rnfields = DMF.giFlags[RNFIELDS];  // fields per ray.
-        if ((ngroups<1) || (onfields<1) || (nrays<1) || (rnfields<1))
+        if ((onfields<1) || (nrays<1) || (rnfields<1))
           return;          // SNH graying. 
           
         bWFE = DMF.giFlags[RWFEFIELD] > RABSENT; 
@@ -173,17 +172,13 @@ class AdjHost implements B4constants
             int j = optEditor.getAdjSurf(iadj);
             if ((j>0) && (j<=nsurfs))
             {
-                int g = RT13.group[j]; 
-                if ((g>0) && (g<=ngroups))
-                {
-                    for (int kray=1; kray<=nrays; kray++)
-                      if (RT13.bGoodRay[kray])
-                      {
-                          double rx = RT13.dGetRay(kray, g, RTXL); 
-                          double ry = RT13.dGetRay(kray, g, RTYL); 
-                          r = Math.max(r, Math.sqrt(rx*rx+ry*ry)); 
-                      }
-                }
+                for (int kray=1; kray<=nrays; kray++)
+                  if (RT13.isRayOK[kray])
+                  {
+                      double rx = RT13.dGetRay(kray, j, RTXL); 
+                      double ry = RT13.dGetRay(kray, j, RTYL); 
+                      r = Math.max(r, Math.sqrt(rx*rx+ry*ry)); 
+                  }
             }
             if (r < 1E-6)
               r = 0.5*dOsize; 
@@ -299,7 +294,7 @@ class AdjHost implements B4constants
         if (istatus==BADITER)
         {
             if (DMF.sAutoErr.equals(""))   // no previous message
-              jL[7].setText("Ray risk. Stopping.");
+              jL[7].setText("Stopping: " + sResults[RT13.getFailCode()] + " " + RT13.getFailSurf());  
             else                           // retain previous message
               jL[7].setText(DMF.sAutoErr); 
         }
@@ -361,7 +356,7 @@ class AdjHost implements B4constants
                 }
 
                 if (op == RDEBUG) // debugger message here....
-                  rayEditor.putField(f, row, RT13.bGoodRay[kray] ? "OK" : "NG"); 
+                  rayEditor.putField(f, row, RT13.isRayOK[kray] ? "OK" : "NG"); 
 
 
                 if (op >= RGOAL) // Comparo updates floating goals, not Auto.
@@ -369,11 +364,11 @@ class AdjHost implements B4constants
 
                 if (op >= 100)   // output table data are wanted here...
                 {
-                    int jsurf = RT13.getGroupNum(op); // handles "final"
+                    int jsurf = RT13.getSurfNum(op); // handles "final"
                     int iattr = RT13.getAttrNum(op); 
                     if ((iattr>=0) && (iattr<RNATTRIBS) && (jsurf>0))
                     {
-                        if (RT13.bGoodRay[kray])
+                        if (RT13.isRayOK[kray])
                         {
                             double d = RT13.dGetRay(kray, jsurf, iattr); 
                             rayEditor.putFieldDouble(f, row, d);  

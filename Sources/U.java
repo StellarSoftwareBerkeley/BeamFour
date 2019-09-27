@@ -206,6 +206,11 @@ class U implements B4constants
     {
         return 1.0/x == Double.NEGATIVE_INFINITY;
     }
+    
+    static boolean isNotNegZero(double x)
+    {
+        return 1.0/x != Double.NEGATIVE_INFINITY; 
+    }
 
     static double sqr(double x) 
     {

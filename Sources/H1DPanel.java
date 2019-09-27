@@ -8,12 +8,12 @@ import java.util.*;        // ArrayList
 
 /**
   * H1DPanel draws a 1D binned ray histogram.
-  *
+  * A207: eliminating groups.
   * Custom artwork class furnishes TechList to GPanel.
   * Rendering is done within GPanel. 
   *
   * LIKE other art, creates new histo when UO=OK
-  *  or when nsurfs, ngroups, nrays change.  
+  *  or when nsurfs or nrays change.  
   *
   * Unit square coordinates, like P2D unit cube coordinates:
   * no intermediate scale factors but instead scales integers.
@@ -49,9 +49,9 @@ public class H1DPanel extends GPanel
 {
     // public static final long serialVersionUID = 42L;
     
-    private int ngroups, nsurfs, npSurfs, npRays, nrays, ngood;
+    private int nsurfs, npSurfs, npRays, nrays, ngood;
     private int hsurf, hattr; 
-    private int prevGroups[] = new int[MAXSURFS+1]; // detect new groups
+    private int prevSurfs[] = new int[MAXSURFS+1]; // ? what for?
     
     final double EXTRAROOM = 2.0;  // windowsize / plotbox
     final double EXTRASPAN = 1.5;  // plotwidth / datarange
@@ -99,27 +99,15 @@ public class H1DPanel extends GPanel
     // Called by GPanel for artwork: new, pan, zoom, & random ray group.
     {
         nsurfs = DMF.giFlags[ONSURFS];                 // always needed.
-        ngroups = DMF.giFlags[ONGROUPS];               // always needed.
         nrays = DMF.giFlags[RNRAYS];                   // always needed.
         ngood = RT13.iBuildRays(true);
-        
         
         String warn = getUOwarning();   // never crashes.
         myGJIF.postWarning(warn); 
         if (warn.length() > 0)
           return;
-          
-          
-        //---see if group assignments have changed----
-        boolean bChanged = false; 
-        for (int j=0; j<MAXSURFS; j++)
-          if (prevGroups[j] != RT13.group[j])
-          {
-              prevGroups[j] = RT13.group[j]; 
-              bChanged = true; 
-          }
         
-        if ((npSurfs != nsurfs) || (npRays != nrays) || bPleaseParseUO || bChanged)
+        if ((npSurfs != nsurfs) || (npRays != nrays) || bPleaseParseUO)
         {
             doParse();     
             npSurfs = nsurfs; 
@@ -216,10 +204,10 @@ public class H1DPanel extends GPanel
     // Local variables shadow H1D fields. 
     // First line of defense, must never crash. 
     {
-        int ngroups = DMF.giFlags[ONGROUPS];
+        int nsurfs = DMF.giFlags[ONSURFS];
         String hst = DMF.reg.getuo(UO_1D, 0); 
         int op = REJIF.getCombinedRayFieldOp(hst); 
-        int hsurf = RT13.getGroupNum(op); 
+        int hsurf = RT13.getSurfNum(op); 
         int hattr = RT13.getAttrNum(op); 
         if ((hsurf<0) || (hattr<0) || (hattr>RNATTRIBS))
           return "Unknown variable:  "+hst; 
@@ -236,7 +224,8 @@ public class H1DPanel extends GPanel
 
         hst = DMF.reg.getuo(UO_1D, 0); 
         int op = REJIF.getCombinedRayFieldOp(hst); 
-        hsurf = RT13.getGroupNum(op); 
+        // hsurf = RT13.getGroupNum(op); 
+        hsurf = RT13.getSurfNum(op); 
         hattr = RT13.getAttrNum(op); 
         nbins = U.parseInt(DMF.reg.getuo(UO_1D, 1));  
         nbins = Math.max(2, Math.min(MAXBINS, nbins)); 
@@ -250,7 +239,7 @@ public class H1DPanel extends GPanel
         RT13.iBuildRays(true); 
         for (int kray=1; kray<=nrays; kray++)
         {
-            if (RT13.bGoodRay[kray])
+            if (RT13.isRayOK[kray])
             {
                 double h = RT13.dGetRay(kray, hsurf, hattr); 
                 if (ngood==0)
@@ -342,7 +331,7 @@ public class H1DPanel extends GPanel
           histo[i] = 0; 
 
         for (int kray=1; kray<=nrays; kray++)
-          if (RT13.bGoodRay[kray])
+          if (RT13.isRayOK[kray])
             addRayToHisto(kray); 
             
     } //---end doParse().

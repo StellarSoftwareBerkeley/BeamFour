@@ -121,7 +121,7 @@ public class DMF extends JFrame implements B4constants
     static final String extensions[] = {"OPT", "RAY", "MED"}; 
 
 
-    //-----file menu setup---------------
+    //-----file menu setup macros and titles---------------
 
     static final int NEWOPT=0, NEWRAY=1, NEWMED=2,  
                      OPENOPT=3, OPENRAY=4, OPENMED=5, 
@@ -308,10 +308,17 @@ public class DMF extends JFrame implements B4constants
     }
     
     private static String getFileOpenPath()
-    // returns appropriate path for File:Open
+    // Returns appropriate current path for File:Open
+    // Works well for folder lookups
+    // Does NOT include a terminal slash
     {
         if ("T".equals(reg.getuo(UO_START, 7)))  // 7 = most recent path button
-          return reg.getuo(UO_START, 8);         // 8 = invisible recent path stash
+        {
+            String s = reg.getuo(UO_START, 8); 
+            // System.out.println("DMF::getFileOpenPath() ok to use most recent folder: "+s); 
+            return reg.getuo(UO_START, 8);         // 8 = invisible recent path stash
+        }
+        // System.out.println("DMF::getFileOpenPath() no recent folder, therefore using sUserHome = "+sUserHome); 
         return sUserHome; 
     }
     
@@ -619,7 +626,7 @@ public class DMF extends JFrame implements B4constants
         {
             public void actionPerformed(ActionEvent ae)
             {
-                //---moved into DMF constructor------------
+                //---stuff moved into DMF constructor------------
                 // String sVersion = java.lang.System.getProperty("java.version"); 
                 // char cJRT = U.getCharAt(sVersion, 2);  
                 // int iJRT = java.lang.Character.getNumericValue(cJRT); 
@@ -833,7 +840,7 @@ public class DMF extends JFrame implements B4constants
     public static class FMIlistener implements ActionListener 
     /// an action listener switchyard for FileMenuItems.
     /// Graying will have been applied by fileGrayingListener(), below.
-    // Need to generalize this to handle New, Open, Recent menu items. 
+    /// A191: using addSlash() to separate fname from fpath.  TEST THIS PLEASE
     {
         // default constructor ok, no static fields to initialize
 
@@ -858,7 +865,7 @@ public class DMF extends JFrame implements B4constants
                 case NEWOPT:
                     if (oejif == null)
                     {
-                        String fname = getFileOpenPath() + "unnamed.OPT"; 
+                        String fname = addSlash(getFileOpenPath()) + "unnamed.OPT"; 
                         writeSkeleton(fname); 
                         oejif = new OEJIF(iXY, fname); 
                         iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
@@ -873,7 +880,7 @@ public class DMF extends JFrame implements B4constants
                 case NEWRAY:
                     if (rejif == null)
                     {
-                        String fname = getFileOpenPath() + "unnamed.RAY"; 
+                        String fname = addSlash(getFileOpenPath()) + "unnamed.RAY"; 
                         writeSkeleton(fname); 
                         rejif = new REJIF(iXY, fname); 
                         iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
@@ -888,7 +895,7 @@ public class DMF extends JFrame implements B4constants
                 case NEWMED:
                     if (mejif == null)
                     {
-                        String fname = getFileOpenPath() + "unnamed.MED"; 
+                        String fname = addSlash(getFileOpenPath()) + "unnamed.MED"; 
                         writeSkeleton(fname); 
                         mejif = new MEJIF(iXY, fname); 
                         iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
@@ -1037,7 +1044,21 @@ public class DMF extends JFrame implements B4constants
                     break; 
             }
         }
+        
+        String addSlash(String s)
+        // adds a terminal slash if absent; separates the filename from the filepath
+        // Seems to be necessary for File::new().
+        // Unnecessary for File::Open or File::Recent.
+        {
+            if (s.length() < 1)
+               return "/";
+            if (s.endsWith("/"))
+               return s;
+            return s + '/';
+        }
     }
+    
+    
 
     MenuListener fileGrayingListener = new MenuListener()
     {
@@ -1399,8 +1420,9 @@ public class DMF extends JFrame implements B4constants
                 gjifTypes[index].setLocation(iXY, iXY); 
                 iXY = (iXY + iWindowOffset) % iWindowOffsetMax; 
                 jdp.add(gjifTypes[index]); 
-                gjifTypes[index].setVisible(true);
+                // gjifTypes[index].setVisible(true); // possibly the reason for the gray JIFrame underbar?
                 gjifTypes[index].toFront();
+                gjifTypes[index].setVisible(true);   // possibly better here??  Nope no effect. 
                 try {gjifTypes[index].setSelected(true);} 
                 catch(java.beans.PropertyVetoException pve) {}
             }
@@ -1622,10 +1644,10 @@ public class DMF extends JFrame implements B4constants
         //----------------set up RT13 LUTs----------------------
 
         for (int j=1; j<=MAXSURFS; j++)
-          RT13.gO2M[j] = ABSENT;
+          RT13.gO2M[j] = ABSENT;  // LUT: each jsurf gives glass ID
 
         for (int k=1; k<=MAXRAYS; k++)
-          RT13.gR2M[k] = ABSENT; 
+          RT13.gR2W[k] = ABSENT;  // LUT: each kray gives wavel ID
 
         //--------search the glass names in use----------------
         //------But! skip any glass names that are numeric-----
@@ -1642,7 +1664,7 @@ public class DMF extends JFrame implements B4constants
                 for (int mrec=1; mrec <= giFlags[MNGLASSES]; mrec++)
                   if (OEJIF.oglasses[jsurf].equals(MEJIF.mglasses[mrec]))
                   {
-                      RT13.gO2M[jsurf] = mrec; // found it!
+                      RT13.gO2M[jsurf] = mrec; // found it! jsurf uses glass number "mrec"
                       break;                   // abandon search. 
                   }
                 if (RT13.gO2M[jsurf] == ABSENT)
@@ -1667,19 +1689,19 @@ public class DMF extends JFrame implements B4constants
         int unkwaverec = ABSENT; 
         String unkwavename = ""; 
         trouble = false; 
-        for (int irec=1; irec <= giFlags[RNRAYS]; irec++)
+        for (int kray=1; kray<= giFlags[RNRAYS]; kray++)
         {
-            if (REJIF.wavenames[irec].length() > 0)  // empty is trouble here.
+            if (REJIF.wavenames[kray].length() > 0)  // empty is trouble here.
               for (int f=1; f <= giFlags[MNWAVES]; f++)
-                if (REJIF.wavenames[irec].equals(MEJIF.mwaves[f]))
+                if (REJIF.wavenames[kray].equals(MEJIF.mwaves[f]))
                 {
-                    RT13.gR2M[irec] = f; // found it.
+                    RT13.gR2W[kray] = f; // found it! kray uses wavel ID "f"
                     break;               // abandon search.
                 }
-            if (RT13.gR2M[irec] == ABSENT)
+            if (RT13.gR2W[kray] == ABSENT)
             {
-                unkwaverec = irec; 
-                unkwavename = REJIF.wavenames[irec]; 
+                unkwaverec = kray; 
+                unkwavename = REJIF.wavenames[kray]; 
                 trouble = true; 
                 break; 
             }
@@ -1745,10 +1767,10 @@ public class DMF extends JFrame implements B4constants
     }    
     
 
-
-    public static boolean writeSkeleton(String fname)
-    {
-        File f = new File(fname); 
+/**
+   public static boolean writeSkeleton(String fname)
+   {
+       File f = new File(fname); 
         try
         {
             FileWriter fw = new FileWriter(f); 
@@ -1767,9 +1789,59 @@ public class DMF extends JFrame implements B4constants
             pw.flush(); 
             pw.close(); 
         }
-        catch (IOException e)  {return false; }
+        catch (IOException e)  
+        {
+            // System.out.println("DMF::writeSkeleton() failure; fname = "+fname); 
+            return false; 
+        }
         return true;
     }    
+*/
+    public static boolean writeSkeleton(String fname)
+    {
+        int nrecords = U.suckInt(reg.getuo(UO_NEWFILE, 0)); 
+        int nfields  = U.suckInt(reg.getuo(UO_NEWFILE, 1)); 
+        int fwidth   = U.suckInt(reg.getuo(UO_NEWFILE, 2)); 
+        String s = makeSkeleton(nrecords+3, nfields, fwidth); 
+        
+        File f = new File(fname); 
+        try
+        {
+            FileWriter fw = new FileWriter(f); 
+            fw.write(s); 
+            fw.close();
+        }
+        catch (IOException e)  
+        {
+            // System.out.println("DMF::writeSkeleton() failure; fname = "+fname); 
+            return false; 
+        }
+        return true;
+    }   
+    
+    static String makeSkeleton(int nrows, int nfields, int fieldwidth)
+    {
+        String s = "";
+        for (int row=0; row<nrows; row++)
+        {
+            char blank = ' ';
+            char delim = ':';
+            if (row < 2)
+                delim = ' ';
+            if (row == 2)
+                blank = '-';
+                
+            for (int field=0; field<nfields; field++)
+            {
+                for (int ichar=0; ichar<fieldwidth; ichar++)
+                    s += blank;
+                s += delim;
+            } 
+            s += '\n'; 
+        }
+        return s;
+    }        
+ 
         
 } //----------end of DMF-----------------------
 

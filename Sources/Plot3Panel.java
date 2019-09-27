@@ -11,6 +11,7 @@ import javax.swing.*;      // Graphics2D features
   * Unit Cube: uxcenter=0, uxspan=1, etc.
   *
   * Uses CenterOrigin for character locations. 
+  * A207: needs -zero detection for absent data, see line 223
   *
   * DeImplemented: additional surface "jOther"
   * Not yet implemented: optical path. 
@@ -34,11 +35,10 @@ public class Plot3Panel extends GPanel
     final double NCHARSOFFSET = 1.5; 
     private int  CADstyle = 0;
     private int iSymbol = 0; 
-    private int jOther = 0; 
     private double wavel = 0.0; 
-    private boolean whitebkg = true; 
+    private boolean blackbkg = false;  // option 16 in B4Constants.java
 
-    private int ngroups, nsurfs, nprev, nrays, ngood, asurf, aattr, bsurf, battr, csurf, cattr;  
+    private int nsurfs, nprev, nrays, ngood, asurf, aattr, bsurf, battr, csurf, cattr;  
     private String ast, bst, cst; 
     private int prevGroups[] = new int[MAXSURFS+1]; // detect new groups
 
@@ -81,7 +81,6 @@ public class Plot3Panel extends GPanel
     // For annotation, host's bitmap is blitted instead.
     {
         nsurfs = DMF.giFlags[ONSURFS];                  // always needed.
-        ngroups = DMF.giFlags[ONGROUPS];                // always needed.
         nrays = DMF.giFlags[RNRAYS];                    // always needed.
         ngood = RT13.iBuildRays(true);
         
@@ -90,17 +89,7 @@ public class Plot3Panel extends GPanel
         if (warn.length() > 0) 
           return; 
  
-        
-        //---see if group assignments have changed----
-        boolean bChanged = false; 
-        for (int j=0; j<MAXSURFS; j++)
-          if (prevGroups[j] != RT13.group[j])
-          {
-              prevGroups[j] = RT13.group[j]; 
-              bChanged = true; 
-          }
-        
-        if ((nprev != nsurfs) || bPleaseParseUO || bChanged)
+        if ((nprev != nsurfs) || bPleaseParseUO)
         {
             nprev = nsurfs;
             doParseSizes(); 
@@ -123,7 +112,7 @@ public class Plot3Panel extends GPanel
 
     protected boolean doRandomRay() // replaces abstract "do" method
     {
-        return drawOneRay(0, QBATCH); 
+        return drawOneRay(0); 
     }
     
     
@@ -159,11 +148,11 @@ public class Plot3Panel extends GPanel
     // Local variables shadow fields of Plot3D. 
     // First line of defense, must never crash. 
     {
-        String word = (ngroups<nsurfs) ? "Ngroups="+ngroups : "Nsurfaces="+nsurfs;
+        String word = "Nsurfaces="+nsurfs;
           
         String ast = DMF.reg.getuo(UO_PLOT3, 0); 
         int op = REJIF.getCombinedRayFieldOp(ast); 
-        int asurf = RT13.getGroupNum(op); 
+        int asurf = RT13.getSurfNum(op); 
         int aattr = RT13.getAttrNum(op); 
         if ((aattr<0) || (aattr>RNATTRIBS))
           return "Unknown:  '"+ast+"'"; 
@@ -172,7 +161,7 @@ public class Plot3Panel extends GPanel
           
         String bst = DMF.reg.getuo(UO_PLOT3, 2); 
         op = REJIF.getCombinedRayFieldOp(bst); 
-        int bsurf = RT13.getGroupNum(op); 
+        int bsurf = RT13.getSurfNum(op); 
         int battr = RT13.getAttrNum(op); 
         if ((battr<0) || (battr>RNATTRIBS))
           return "Unknown:  '"+bst+"'"; 
@@ -181,7 +170,7 @@ public class Plot3Panel extends GPanel
           
         String cst = DMF.reg.getuo(UO_PLOT3, 4); 
         op = REJIF.getCombinedRayFieldOp(cst); 
-        int csurf = RT13.getGroupNum(op); 
+        int csurf = RT13.getSurfNum(op); 
         int cattr = RT13.getAttrNum(op); 
         if ((cattr<0) || (cattr>RNATTRIBS))
           return "Unknown:  '"+cst+"'"; 
@@ -199,22 +188,20 @@ public class Plot3Panel extends GPanel
 
         ast = DMF.reg.getuo(UO_PLOT3, 0); 
         int op = REJIF.getCombinedRayFieldOp(ast); 
-        asurf = RT13.getGroupNum(op); 
+        asurf = RT13.getSurfNum(op); 
         aattr = RT13.getAttrNum(op); 
 
         bst = DMF.reg.getuo(UO_PLOT3, 2); 
         op = REJIF.getCombinedRayFieldOp(bst); 
-        bsurf = RT13.getGroupNum(op); 
+        bsurf = RT13.getSurfNum(op); 
         battr = RT13.getAttrNum(op); 
 
         cst = DMF.reg.getuo(UO_PLOT3, 4); 
         op = REJIF.getCombinedRayFieldOp(cst); 
-        csurf = RT13.getGroupNum(op); 
+        csurf = RT13.getSurfNum(op); 
         cattr = RT13.getAttrNum(op); 
 
         //--------------view angles--------------
-
-        // jOther = getOther(ngroups); 
         
         el = U.suckDouble(DMF.reg.getuo(UO_PLOT3, 6));
         cosel = U.cosd(el); 
@@ -229,7 +216,7 @@ public class Plot3Panel extends GPanel
         int ngood=0; 
         for (int kray=1; kray<=nrays; kray++)
         {
-            if (RT13.bGoodRay[kray])
+            if (RT13.isRayOK[kray])
             {
                 a = RT13.dGetRay(kray, asurf, aattr); 
                 b = RT13.dGetRay(kray, bsurf, battr); 
@@ -291,16 +278,16 @@ public class Plot3Panel extends GPanel
     //-------ARTWORK---------------
     
 
-    private void addView(double x, double y, double z, int op, int which)
+    private void addView(double x, double y, double z, int op, int whichbase)
     {
         double xyz[] = {x, y, z};     
-        addView(xyz, op, which); 
+        addView(xyz, op, whichbase); 
     }
     
-    private void addView(double xyz[], int op, int which)
+    private void addView(double xyz[], int op, int whichbase)
     {
         viewelaz(xyz); 
-        addScaled(xyz, op, which);
+        addScaled(xyz, op, whichbase);
     }
     
 
@@ -315,11 +302,11 @@ public class Plot3Panel extends GPanel
           iSymbol = SQUARE; 
         if ("T".equals(DMF.reg.getuo(UO_PLOT3, 12)))
           iSymbol = DIAMOND; 
-        whitebkg = "T".equals(DMF.reg.getuo(UO_PLOT3, 15));
-        
+        blackbkg = "T".equals(DMF.reg.getuo(UO_PLOT3, 16));
+
         clearList(QBASE); 
-        addRaw(0., 0., 0., whitebkg ? SETWHITEBKG : SETBLACKBKG, QBASE); 
-        addRaw(0., 0., 0., SETCOLOR + (whitebkg ? BLACK : WHITE), QBASE); 
+        addRaw(0., 0., 0., blackbkg ? SETBLACKBKG : SETWHITEBKG, QBASE);
+        addRaw(0., 0., 0., SETCOLOR+(blackbkg ? WHITE : BLACK), QBASE);         
         addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
         addRaw(0., 0., 0., COMMENTRULER, QBASE); 
         
@@ -327,20 +314,17 @@ public class Plot3Panel extends GPanel
         drawBruler(); 
         drawCruler();
 
-        // jOther = getOther(ngroups); 
-        jOther = 0; 
-
         // finally.... draw the ray hits. 
         addRaw(1., 0., 0., SETSOLIDLINE, QBASE); 
         addRaw(0., 0., 0., COMMENTRAY, QBASE); 
         for (int k=1; k<=nrays; k++)
-          drawOneRay(k, QBASE); 
+          drawOneRay(k); 
     }
 
-
-    private boolean drawOneRay(int kray, int which)
+    /*
+    private boolean oldDrawOneRay(int kray, int whichbase)
     // Called both by RandomRay and TableRay.
-    // Relies upon iSymbol, jOther, asurf, bsurf...set up in doArt().
+    // Relies upon iSymbol, asurf, bsurf...set up in doArt().
     {
         int jmin = ngroups;
         int icolor = 0; 
@@ -357,7 +341,7 @@ public class Plot3Panel extends GPanel
             bStatus = (RT13.getHowfarRay(0) >= jmin);
         }
         else
-          bStatus = (RT13.getHowfarRay(kray) >= jmin); 
+          bStatus = (RT13.getHowfarOK(kray) >= jmin); 
 
         if (bStatus)
         {
@@ -376,7 +360,7 @@ public class Plot3Panel extends GPanel
             xyz[0] = (aa-amid)/aspan;  // unit cube
             xyz[1] = (bb-bmid)/bspan;  // unit cube
             xyz[2] = (cc-cmid)/cspan;  // unit cube
-            addView(xyz, iSymbol+icolor, which); 
+            addView(xyz, iSymbol+icolor, whichbase); 
             if ((jOther > 0) && (asurf == bsurf) && (asurf == csurf))
             {
                 aa = RT13.dGetRay(kray, jOther, aattr); 
@@ -385,9 +369,67 @@ public class Plot3Panel extends GPanel
                 xyz[0] = (aa-amid)/aspan;  // unit cube
                 xyz[1] = (bb-bmid)/bspan;  // unit cube
                 xyz[2] = (cc-cmid)/cspan;  // unit cube
-                addView(xyz, iSymbol+icolor, which); 
+                addView(xyz, iSymbol+icolor, whichbase); 
             }
             return true; 
+        }
+        return false; 
+    } 
+    */
+    
+    
+    
+    boolean drawOneRay(int kray)
+    // Relies upon iSymbol, hsurf, ..setup as part of doArt().
+    // Handles random rays k=0 also table rays 1<=kray<=nrays. 
+    // A207.11 Dec 2018 with bimodals; no groups; no OtherSurface.
+    // Plot all that reach these two surfaces, or only OK rays?
+    // These are UO_PLOT3D option 13 "good" vs option 14 "all"
+    {
+        // First get a ray
+        boolean isGood; 
+        int base; 
+        if (kray==0)
+        {
+           isGood = RT13.bRunRandomRay();
+           base = QBATCH;
+        }
+        else
+        {
+           isGood = RT13.isRayOK[kray]; 
+           base = QBASE;
+        }    
+        
+        // Now test the ray   
+        boolean bHasEnough = RT13.getHowfarOK(kray) >= U.imax3(asurf, bsurf, csurf);
+        boolean bHasComplete = RT13.getHowfarOK(kray) == nsurfs; 
+        boolean bWantEnough  = DMF.reg.getuo(UO_PLOT3, 14).equals("T");  // option 14 is "Sufficient"
+        boolean bWantComplete = DMF.reg.getuo(UO_PLOT3, 13).equals("T");  // option 13 is "Complete"
+ 
+        int icolor;
+        if (kray==0)
+            icolor = (int) RT13.raystarts[RT13.getGuideRay()][RSCOLOR];
+        else
+            icolor = (int) RT13.raystarts[kray][RSCOLOR]; 
+        if (blackbkg && (icolor==BLACK))
+            icolor = WHITE; 
+            
+        if ((bWantEnough && bHasEnough) || (bWantComplete && bHasComplete))
+        {
+            double xyz[] = new double[3];
+            double a = RT13.dGetRay(kray, asurf, aattr); 
+            double b = RT13.dGetRay(kray, bsurf, battr); 
+            double c = RT13.dGetRay(kray, csurf, cattr); 
+            if (U.isNotNegZero(a) && U.isNotNegZero(b) && U.isNotNegZero(c))
+            {
+                if (DEBUG)
+                   System.out.println("Plot3D is loading one triplet.");
+                xyz[0] = (a-amid)/aspan;    // unit cube
+                xyz[1] = (b-bmid)/bspan;    // unit cube
+                xyz[2] = (c-cmid)/cspan;    // unit cube
+                addView(xyz, iSymbol+icolor, base);    
+                return true; 
+            }
         }
         return false; 
     } 

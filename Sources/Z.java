@@ -2,7 +2,7 @@ package com.stellarsoftware.beam;
 
 
 /** class Z is entirely static methods, never instantiated.
-  * Provides surface function vGetZsurf() for Layout, all surface types.
+  * Provides surface function dGetZsurf() for Layout, all surface types.
   * Also supplies vGetSurf() for RT13 for higher surface types.
   *
   *    PHANTOM HYPERBOLOIDS ARE FORBIDDEN
@@ -40,42 +40,58 @@ class Z implements B4constants
     static public double dGetZsurf(double x, double y, double surf[])
     // Uses x,y and returns z for general surface.
     // Called by Layout graphics with xyz[3] all local.
-    // Called by RT13 for all surface types. 
+    // Called by RT13.dIntercept() only for higher surface types;
+    // RT13.dIntercept uses its local dPlaneSolve and dQuadSolve() for simple types. 
+    // ?? Why only "higher" surfaces & numerical methods?
+    // Apparently fails to be called for OSGAUSS which certainly needs a numerical intercept.
+    // The interceptor switchyard is in RT13.dIntercept() lines 1200-1400.
+    // The profile classifier sets OPROFILE; it is in OEJIF.java, lines 400-500
     // Copyright 2006 STELLAR SOFTWARE all rights reserved.
+    // A better plan: use profile flags, and coadd all flagged surface types.
     {
         x = dSawtoothX(x, surf); 
         y = dSawtoothY(y, surf); 
-        switch ((int) surf[OPROFILE])
+        int iPro = (int) surf[OPROFILE];
+        // System.out.println("Z.java dGetZsurf() has been sent "+sProfiles[iPro]);
+        switch (iPro)
         {
-           case OSPLANO:   return 0.0; 
+           case OSPLANO:   return 0.0;   // unused; see RT13.dIntercept().
            case OSCONIC:
            case OSCONICLT:
-           case OSCONICGT: return zConic(x, y, surf);
+           case OSCONICGT: // System.out.println("dGetZsurf() is branching to zConic().");
+                           return zConic(x, y, surf); // unused; see RT13.dIntercept().
            case OSXCYL:
            case OSXCYLLT:
-           case OSXCYLGT:  return zXcyl(x, y, surf);
+           case OSXCYLGT:  return zXcyl(x, y, surf);   // unused; see RT13.dIntercept().
            case OSYCYL:
            case OSYCYLLT:
-           case OSYCYLGT:  return zYcyl(x, y, surf);
+           case OSYCYLGT:  return zYcyl(x, y, surf);   // unused; see RT13.dIntercept().
            case OSTORIC:   return zToric(x, y, surf);
-           case OSPOLYREV: return zPolyRevCombiner(x, y, surf);
+           case OSPOLYREV: // System.out.println("dGetZsurf() is branching to zPolyRevCombiner"); 
+                           return zPolyRevCombiner(x, y, surf);
            case OSZERNREV: return zZernRevCombiner(x, y, surf);
            case OSZERNTOR: return zZernTorCombiner(x, y, surf);
            case OSBICONIC: return zBiconic(x, y, surf); 
+           case OSGAUSS:   // System.out.println("dGetZsurf() is branching to zGauss"); 
+                           return zGauss(x, y, surf);
            default:        return 0.0; 
         }
     }
 
 
-    static public void vGetZnorm(double x, double y, double surf[], double norm[])
+    static public void vGetNormal(double x, double y, double surf[], double norm[])
     // x, y, and surf[] are input; result is norm[3].
-    // Each method called gives its gradient in norm[0], norm[1];
+    // Each method called reports its gradient into norm[0], norm[1];
     // Converted to normalized normal at end of this method.
     // A189: changed signs so that norm[2] is towards +z. 
+    // The profile classifier sets OPROFILE; it is in OEJIF.java, lines 400-500.
+    // A better plan: use profile flags, and coadd all flagged surface types.
     {
         x = dSawtoothX(x, surf); 
         y = dSawtoothY(y, surf); 
-        switch ((int) surf[OPROFILE])
+        int iPro = (int) surf[OPROFILE]; 
+        // System.out.println("Z.java dGetNormal() has been sent "+sProfiles[iPro]); 
+        switch (iPro)
         {
            case OSPLANO:   vGradPlane(norm); break;
            case OSCONIC:
@@ -92,6 +108,8 @@ class Z implements B4constants
            case OSZERNREV: vGradZernRevCombiner(x, y, surf, norm); break;
            case OSZERNTOR: vGradZernTorCombiner(x, y, surf, norm); break;
            case OSBICONIC: vGradBiconic(x, y, surf, norm); break; 
+           case OSGAUSS:   // System.out.println("vGetNormal() is branching to vGradGauss()");
+                           vGradGauss(x, y, surf, norm);  break; 
            default:        vGradPlane(norm); break; 
         }
         norm[0] *= -1.0;    // 2015 Oct 7, A189
@@ -272,8 +290,31 @@ class Z implements B4constants
           sum = (sum + surf[i+OA1-1])*r;
         return sum;
     }
-
-
+    
+    
+    
+    
+    static private double zGauss(double x, double y, double surf[])
+    // 2D circular Gaussian, rms radius "sigma" = surf[ORGAUSS]
+    // Copyright 2017 STELLAR SOFTWARE all rights reserved.
+    {
+        // System.out.println("zGauss has been called.");
+        if (surf[ORGAUSS] <= 0.)
+        {
+            // System.out.println("zGauss is returning negative zero");
+            return -0.0;
+        }
+        double r2 = x*x + y*y;
+        double s2 = surf[ORGAUSS]*surf[ORGAUSS];
+        double result = surf[OHGAUSS] * Math.exp(-0.5*r2/s2);
+        // System.out.println("zGauss is returning "+result); 
+        return result; 
+    }
+    
+    
+    
+    
+    
     static private double zZern(double x, double y, double surf[])
     // Always fully 2-dimensional. 
     // Copyright 2006 STELLAR SOFTWARE all rights reserved.
@@ -502,7 +543,6 @@ class Z implements B4constants
     // Poly2D alone; gives unnormalized gradient. 
     // Copyright 2006 STELLAR SOFTWARE all rights reserved
     {
-        // System.out.println("class Z, vGradPolyRev has been called."); 
         double r2 = x*x + y*y; 
         double r = Math.sqrt(r2); 
         grad[0] = 0.0; 
@@ -525,8 +565,6 @@ class Z implements B4constants
     // Polynomial terms OS1..OA14 are included.
     // Copyright 2007 STELLAR SOFTWARE all rights reserved.
     {
-        // System.out.println("class Z, vGradToric has been called."); 
-        // double absy = Math.abs(y); 
         double sy = surf[OASPHER] + 1.0; 
         double cx = surf[OCURVX]; 
         double cy = surf[OCURVE]; 
@@ -576,8 +614,22 @@ class Z implements B4constants
         grad[1] = ratio * dfdy / arg2; 
     }
 
-
-
+    static private void vGradGauss(double x, double y, double surf[], double grad[])
+    // Copyright STELLAR SOFTWARE 2017
+    // For debugging, don't call zGauss(); instead repeat its math locally.
+    {
+        // System.out.println("vGradGauss() has been called.");
+        grad[0] = 0.0; 
+        grad[1] = 0.0; 
+        if (surf[ORGAUSS] <= 0.0)  /// S.N.H.
+            return;
+        double r2 = x*x + y*y;
+        double s2 = surf[ORGAUSS]*surf[ORGAUSS];
+        double z = surf[OHGAUSS] * Math.exp(-0.5*r2/s2);    
+        grad[0] = -x * z / s2;
+        grad[1] = -y * z / s2;
+        // System.out.println("vGradGauss() is returning its gradient."); 
+    }
 
     //-------------Zernike gradient-------------------------------
 
