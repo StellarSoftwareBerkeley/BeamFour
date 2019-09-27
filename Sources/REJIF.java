@@ -8,6 +8,7 @@ import javax.swing.text.*;  // BadLocationException
 
 /**
   *  REJIF is a concrete ray editor class extending EJIF.
+  *  Output is to RT13.raystarts[nrays][nattribs]; see line 194.
   *  It supplies EJIF's abstract method parse(). 
   *  It implements Consts via EJIF. 
   *  A174: includes ray-intercept normal components {i,j,k}
@@ -17,7 +18,7 @@ import javax.swing.text.*;  // BadLocationException
   *
   *  Uses EJIF for getTag(f,r) and getFieldTrim(f,r).
   *
-  * Writes to external RT13.raystarts[][][]
+  * Writes to external RT13.raystarts[][]
   * also to RT13.smins[], RT13.spans[] for random <<RORDER??
   * Writes/reads external DMF.giFlags[] etc
   *
@@ -49,7 +50,7 @@ class REJIF extends EJIF
    
     public static String wavenames[] = new String[JMAX];
     public static int rF2I[] = new int[MAXFIELDS]; 
-    public static int rI2F[] = new int[RNSTARTS];  // raystarts ONLY not general opcodes.
+    public static int rI2F[] = new int[RNSTARTS];  // 10 raystart attributes: B4constants.java
     public static int wavefield; 
     // public static final long serialVersionUID = 42L;
 
@@ -106,7 +107,6 @@ class REJIF extends EJIF
             wavenames[kray] = "";
             for (int ia=0; ia<RNSTARTS; ia++)
               RT13.raystarts[kray][ia] = -0.0; // -0.0 means absentee data
-            RT13.iWFEgroup[kray] = 0;          // default is group #zero
         }
 
         for (int f=0; f<MAXFIELDS; f++)
@@ -172,7 +172,7 @@ class REJIF extends EJIF
             // get raystarts:  RX,RY,RZ,RU,RV,RW,RPATH,RSWAVEL,RSCOLOR,RSORDER
             // these get stored in RT13.raystarts[][] overwriting -0.0
 
-            if ((op>=RX) && (op<RNSTARTS)) // subset for input Raystarts.
+            if ((op>=RX) && (op<RNSTARTS)) // 10 Raystarts: X,Y,Z,U,V,W,P,wave,color,order.
             {   
                 //------autoray adjustables found in initial ray record--------
                 //--count all the question marks but save only the first two---
@@ -244,14 +244,13 @@ class REJIF extends EJIF
             }
             if (rsyntaxerr > 0)
               break; // break out of field loop to preserve location. 
-        } //-------end of field loop-------------
+        } //-------end of field loop; fixupUVW() is done in RT13---------
 
         DMF.giFlags[RSYNTAXERR] = rsyntaxerr; 
         DMF.giFlags[RALLWAVESNUMERIC] = allWavesNumeric ? 1 : 0; 
         DMF.giFlags[RNADJ] = iParseAdjustables(nrays); 
-        DMF.giFlags[RNWFEGROUPS] = iParseWFEgroups(nrays); 
 
-        setSminsSpans();                 // needs WFEgroups, above.
+        setSminsSpans();  
 
     }  //---------end of parse()---------------
 
@@ -408,6 +407,8 @@ class REJIF extends EJIF
     // fills in private ArrayList of adjustables, with slaves & antislaves.
     // Returns how many groups were found based on rayStart tags.
     {
+        if (nrays < 1)
+            return 0;
         boolean bLookedAt[] = new boolean[nrays+1]; 
         adjustables.clear(); 
         for (int field=0; field<nfields; field++)
@@ -464,7 +465,7 @@ class REJIF extends EJIF
         return (c=='?') || Character.isLetter(c);
     }
 
-
+/*
     private int iParseWFEgroups(int nrays)
     // Fills in RT13.iWFEgroup[kray].
     // Groups are numbered 0, 1, ...ngroups-1. 
@@ -504,58 +505,57 @@ class REJIF extends EJIF
         } 
         return ngroups; 
     }
-
+*/
 
 
     private void setSminsSpans()
-    // Examines tabulated raystarts for extreme values;  
+    // Examines tabulated raystarts[] for extreme values;  
     // Sets smins[][], spans[][] for use by randomizer in RT13.
     // Called only locally by REJIF.parse().
     // Special case for absentee data: let smin[]=span[]=-0.0
     // Uses RT13.iWFEgroup[] -- must run iParseWFEgroups() first!!
+    // A207: WFEgroups eliminated 
     {
         int nrays = DMF.giFlags[RNRAYS]; 
-        int ngroups = DMF.giFlags[RNWFEGROUPS]; 
-
-        double a=0.0, b=0.0, x; 
-        for (int ig=0; ig<ngroups; ig++)
+        for (int iatt=RX; iatt<=RW; iatt++)
         {
-            for (int iatt=RX; iatt<=RW; iatt++)
+            // System.out.println("REJIF.setSminsSpans() is starting iatt = "+iatt); 
+            boolean bAngles = (iatt >= RU); 
+            double x=-0., xmin=-0., xmax=-0., xsave=-0.;
+            int raycount = 0; 
+            for (int k=1; k<=nrays; k++)   // First, count the available entries
             {
-                int raycount = 0; 
-                a = b = 0.0; 
-                boolean bPresent = false; 
-                boolean bAngles = (iatt >= RU); 
-                for (int k=1; k<=nrays; k++)
+                x = RT13.raystarts[k][iatt];   
+                if (!U.isNegZero(x))
                 {
-                    if (ig == RT13.iWFEgroup[k])  //---gather a, b-----
+                    raycount++; 
+                    xsave = x;
+                }
+            }
+            if (raycount<=1)
+            {
+                RT13.smaxs[iatt] = xsave;
+                RT13.smins[iatt] = xsave; 
+                RT13.spans[iatt] = 0.0;
+            }
+            else  // two or more rays to determine span
+            {
+                xmin = xmax = xsave;
+                for (int k=1; k<=nrays; k++)  
+                {                
+                    x = RT13.raystarts[k][iatt];   
+                    if (!U.isNegZero(x))
                     {
-                        raycount++; 
-
-                        x = RT13.raystarts[k][iatt]; 
-                        if (!U.isNegZero(x))
-                          bPresent = true; 
-
-                        if (raycount == 1)
-                        {
-                            a = b = RT13.raystarts[k][iatt]; 
-                            bPresent = !U.isNegZero(a); 
-                        }
-                        else if (raycount > 1)
-                        {
-                            a = Math.min(a, x); 
-                            a = bAngles ? U.pm1(a) : a; 
-                            b = Math.max(b, x); 
-                            b = bAngles ? U.pm1(b) : b; 
-                        }
+                        xmin = Math.min(xmin, x);
+                        xmax = Math.max(xmax, x);
                     }
-                } //-----------done searching all rays-----------
-
-
-                RT13.smins[ig][iatt] = bPresent ? a : -0.0; 
-                RT13.spans[ig][iatt] = bPresent ? b-a : -0.0;
-
-            } //-------------done with all attributes--------
-        } //---------------done with all groups---------------------
+                }
+                RT13.smaxs[iatt] = xmax;
+                RT13.smins[iatt] = xmin; 
+                RT13.spans[iatt] = xmax - xmin;    
+            }
+            // System.out.printf("REJIF.setSminsSpans() returning iatt, xmin, span = %3d %8.4f %8.4f \n", iatt, xmin, xmax-xmin); 
+                
+        } //---------------done with all attributes---------------------
     } //-----------------done setting spans-----------------------
 }

@@ -3,23 +3,30 @@ package com.stellarsoftware.beam;
 import java.awt.*;   // Color
 
 /**
-  * B4constants.java  -- an interface carrying static global constants.
-  * 
-  * 
+  * B4constants.java  -- an interface carrying static global constants
+  *  A207: attempting logic cleanup for bimodal optics
+  *  A206: Converting all mirrors into bimodal mirrors, never killing rays
+  *  A205: Autoadjust ray failure now announces surface & failure classification
+  *  A204: fix the spider layout artwork (spider FUNCTIONS okay). 
+  *  A203: allow "asphericity" as well as previous "asph"; see OEJIF line 800.
+  *  A202 wider editor fields. 
+  *  A201  Sept 2017 has user selected skeleton parameters for new files. 
   *  All fields here are public static final. (H&C p.206)
   *  Added RTANGLE between ray and normal any surface, March 2015, Oct 2015.
   *  Added RTNORMX, RTNORMY, RTNORMZ as new ray attributes. 
   *  Added lower case i, j, k to read out the surface normal vector. 
-  *
-  *  @author M.Lampton STELLAR SOFTWARE (c) 2004-2014 all rights reserved.
+  *  Added OSGAUSS for 2D circular Gaussian shaped surface profile
+  *  Added user selectable new file skeleton options  A201
+  *  @author M.Lampton STELLAR SOFTWARE (c) 2004-2016 all rights reserved.
   */
 interface B4constants
-{
+{    
     static final String  PRODUCT    = "BEAM FOUR  "; 
-    static final String  RELEASE    = "Release 190, 13 January 2016";
-    // fill in your compiler below... "Compiler was: Javac 1.6.0_65" for user compatibility
-    static final String  COMPILER   = "Compiler was: Javac 1.6.0_65";
-    static final String  COPYRIGHT  = "(c) 2016 Stellar Software"; 
+    static final String  RELEASE    = "Release 208,  15 Jan 2019";
+    static final String  COMPILER   = "Compiler was: Javac 1.8.0_20";
+    static final String  COPYRIGHT  = "(c) 2018 Stellar Software"; 
+    static final boolean DEBUG      = false; 
+    
     static final char    NULLCHAR   = (char) 0;
     
     static final int BLINKMILLISEC      = 300; // millisec
@@ -48,15 +55,17 @@ interface B4constants
     static final int THINLINE       = 0;
     static final int FATLINE        = 1;
 
-    static final int IMAX           = 256;       // EPanel charTable
-    static final int JMAX           = 3600;      // EPanel charTable
+    static final int IMAX           = 512;       // Chars EPanel charTable
+    static final int JMAX           = 3600;      // Rows EPanel charTable
     static final int MAXFIELDS      = 100;
     static final int MAXSURFS       = 100;       // < JMAX
-    static final int MAXGROUPS      = MAXSURFS;  
+    // static final int MAXGROUPS      = MAXSURFS;  
     static final int MAXRAYS        = JMAX-3;    // < JMAX
+    // note: 17 circles = 919 rays; 34 rings = 3571 rays.
+    static final int MAXRINGS       = (int) (-0.5+Math.sqrt(12*MAXRAYS-3.)/6.);
     static final int MAXMEDIA       = 200;       // < JMAX
     static final int MAXGOALS       = 7;         // AutoAdjust
-    static final int MAXWFEGROUPS   = 100; 
+    // static final int MAXWFEGROUPS   = 100; 
     static final int MAXADJ         = 100; 
     static final int MAXMAP         = 100;  
     static final int MAXMP          = 9;      // multiplots per axis
@@ -124,7 +133,7 @@ interface B4constants
     static final double MAXSIZE      = 1.5e+6; // plot & layout sanity?
     static final double DENSE        = 1.60;   // heavy if refraction>DENSE
     static final double PLOTTICKFRAC = 0.015;  // plot iristick/opticspan
-    static final double DOTTEDFRAC   = 0.04;   // extension/opticspan
+    // static final double DOTTEDFRAC   = 0.04;   // extension/opticspan
     static final double TICKHEIGHT   = 0.015;  // rulerticks/unitsquare
 
 /*---------------LMITER constants-------------------------*/
@@ -148,50 +157,112 @@ interface B4constants
     static final String RAYSTARTCHARS = "XYZUVWxyzuvw"; // for MapPanel
 
 
-/*-------------------RunRay Tstring[] codes------------*/
+/*-------------------RunRay Tstring[] error codes---------------*/
+/*-----these could be simplified going to a 4x4 SURFxRAY plan---*/
+/*---have them pure ray errors, not mingled with surface IDs----*/
 
-    static final int RROK  =  0;    // general no-failure code
+    static final int RROK  =  0;    // general no-failure error code
+    
     static final int RRMIS =  1;    // ray missed surface.
     static final int RRBAK =  2;    // ray intercepted but behind start.
-    static final int RRBRA =  3;    // propagation fail bracket
-    static final int RRPRP =  4;    // general propagation failure
-    static final int RRUNK =  5;    // unknown diffraction wavelength or other.
-    static final int RRORD =  6;    // redirection fail diffraction order
-    static final int RRTIR =  7;    // redirection fail total internal reflection
-    static final int RRDIA =  8;    // non-Iris Diameter
-    static final int RRdia =  9;    // non-Iris diameter
-    static final int RRIRI = 10;    // Iris OD fail
-    static final int RRiri = 11;    // Iris ID fail 
-    static final int RRSPI = 12;    // spider leg
-    static final int RRARR = 13;    // array setup invalid
-    static final int RRGRP = 14;    // group failed 
-    static final int RRBI  = 15;    // bimodal inner diam intercept
-    static final int RRBO  = 16;    // bimodal outer Diam intercept
-    static final int RRNON = 17;    // not implemented    
+    static final int RRBRA =  3;    // bracket intercept fail
+    
+    static final int RRDIA =  4;    // Diameter: obj or iris
+    
+    static final int RRdia =  5;    // inner diameter: obj or iris
+    static final int RRSPI =  6;    // spider leg    
+    
+    static final int RRORD =  7;    // redirection fail diffraction order
+    static final int RRTIR =  8;    // redirection fail total internal reflection
+    static final int RRARR =  9;    // array setup invalid
+    static final int RRBXO = 10;    // bimodal crossover failure
+    static final int RRTER = 11;    // terminate the trace at redirect() stage
+    static final int RRUNK = 12;    // unknown or blf/blm, or not implemented    
     
     // sResults[] are used by InOut to explain result[]
+    // Needs a special code for NonNumericalWavelength.
     static final String[] sResults = {   
     "OK",        // 0
     "mis",       // 1
     "bak",       // 2
     "bra",       // 3
-    "pro",       // 4
-    "unk",       // 5
-    "ord",       // 6
-    "TIR",       // 7
-    "Dia",       // 8
-    "dia",       // 9
-    "Iri",       // 10
-    "iri",       // 11
-    "spi",       // 12
-    "arr",       // 13
-    "Grp",       // 14
-    
-    "BiI",       // 15
-    "BiO",       // 16
-    "non"};      // 17
+    "Dia",       // 4
+    "dia",       // 5
+    "Spi",       // 6
+    "Ord",       // 7
+    "TIR",       // 8
+    "Arr",       // 9
+    "BXO",       // 10
+    "Ter",       // 11
+    "Unk"};      // 12
    
+    // the 22 codex values are listed here...
+    static final int UNIOK = 0; 
+    static final int UNIIF = 1;
+    static final int UNIPO = 2; // Pupil Outside fail
+    static final int UNIPI = 3; // Pupil Inside fail
+    static final int UNIRF = 4; // Redirection Failure
+    
+    static final int BMOK  = 5;
+    static final int BMIF  = 6;
+    static final int BMPO  = 7; 
+    static final int BMPI  = 8; 
+    static final int BMRF  = 9; 
+    
+    static final int BLFOK = 10;
+    static final int BLFIF = 11; 
+    static final int BLFPO = 12; 
+    static final int BLFPI = 13; 
+    static final int BLFRF = 14;
+    
+    static final int BLBOK = 15;
+    static final int BLBIF = 16; 
+    static final int BLBPO = 17;
+    static final int BLBPI = 18;
+    static final int BLBRF = 19; 
+    
+    static final int BTOK  = 20; // bimodal terminator ray hit & kill 
+    static final int BTIF  = 21; //
+    static final int BTPO  = 22;
+    static final int BTPI  = 23;
+    static final int BTRF  = 24; 
+    
+    static final int BLBXO = 25;  // bimpdal crossover failure 
+    
+    static final int CODEXMULT = 5; // since 5 categories of ray failures
 
+    static final String[] sCodex = {
+    "UNIOK",    // 0
+    "UNIIF",    // 1
+    "UNIPO",    // 2
+    "UNIPI",    // 3
+    "UNIRF",    // 4
+    
+    "BMOK",     // 5
+    "BMIF",     // 6
+    "BMPO",     // 7
+    "BMPI",     // 8
+    "BMRF",     // 9
+    
+    "BLFOK",    // 10
+    "BLFIF",    // 11
+    "BLFPO",    // 12
+    "BLFPI",    // 13
+    "BLFRF",    // 14
+    
+    "BLBOK",    // 15
+    "BLBIF",    // 16
+    "BLBPO",    // 17
+    "BLBPI",    // 18
+    "BLBRF",    // 19
+    
+    "BTOK",     // 20  bimodal terminator ray hit & kill
+    "BTIF",     // 21  bimodal terminator ray miss & bypass
+    "BTPO",     // 22  bimodal terminator ray OD bypass
+    "BTPI",     // 23  bimodal terminator ray ID bypass
+    "BTRF",     // 24  bimodal terminator ray redirect fail: SNH
+    
+    "BLBXO"};   // 25 bimodal crossover failure
 
 
 /*------------ generic editor status[] index macro defs ------------*/
@@ -207,7 +278,7 @@ interface B4constants
     static final int OPRESENT         = 0; // 0=absent=FALSE, 1=present=TRUE
     static final int ONLINES          = 1; // generic
     static final int ONSURFS          = 2; // generic
-    static final int ONGROUPS         = 3; // new; testing...
+    // static final int ONGROUPS         = 3; // new; testing...
     static final int ONFIELDS         = 4; // generic
     static final int OMEDIANEEDED     = 5; // 0=FALSE=okWithout, 1=TRUE=needsMedia.
     static final int OGRATINGPRESENT  = 6; // 1=present 
@@ -291,7 +362,7 @@ interface B4constants
     "OK"};                                 // 16
 
 
-/*----------------------optics table column attributes-------------*/
+/*----------------------optics table column attribute fields-------------*/
 
     static final int OABSENT   = -1; 
     static final int OREFRACT  =  1; // refractive index approaching surface j
@@ -331,94 +402,157 @@ interface B4constants
     static final int OA13      = 32;
     static final int OA14      = 33;
 
-    static final int OGX       = 34; // any of this set triggers GROOVY
-    static final int OGY       = 35;
-    static final int OORDER    = 36; 
-    static final int OVLS1     = 37;
-    static final int OVLS2     = 38;
-    static final int OVLS3     = 39;
-    static final int OVLS4     = 40;
-    static final int OHOEX1    = 41;
-    static final int OHOEY1    = 42;
-    static final int OHOEZ1    = 43;
-    static final int OHOEX2    = 44;
-    static final int OHOEY2    = 45;
-    static final int OHOEZ2    = 46;
-    static final int OHOELAM   = 47;
-    static final int OGROOVY   = 48; 
+
+
     
-    static final int OZ00      = 50; // Zernike coefficient 0: piston
-    static final int OZ01      = 51;
-    static final int OZ02      = 52; 
-    static final int OZ03      = 53; 
-    static final int OZ04      = 54; 
-    static final int OZ05      = 55; 
-    static final int OZ06      = 56; 
-    static final int OZ07      = 57; 
-    static final int OZ08      = 58; 
-    static final int OZ09      = 59; 
-    static final int OZ10      = 60; 
-    static final int OZ11      = 61; 
-    static final int OZ12      = 62; 
-    static final int OZ13      = 63; 
-    static final int OZ14      = 64; 
-    static final int OZ15      = 65; 
-    static final int OZ16      = 66; 
-    static final int OZ17      = 67; 
-    static final int OZ18      = 68; 
-    static final int OZ19      = 69; 
-    static final int OZ20      = 70; 
-    static final int OZ21      = 71; 
-    static final int OZ22      = 72; 
-    static final int OZ23      = 73; 
-    static final int OZ24      = 74; 
-    static final int OZ25      = 75; 
-    static final int OZ26      = 76; 
-    static final int OZ27      = 77; 
-    static final int OZ28      = 78; 
-    static final int OZ29      = 79; 
-    static final int OZ30      = 80; 
-    static final int OZ31      = 81; 
-    static final int OZ32      = 82; 
-    static final int OZ33      = 83; 
-    static final int OZ34      = 84; 
-    static final int OZ35      = 85; 
-    static final int OFOCAL    = 86; //focal length of thin lens
-    static final int OFINALADJ = 87; // final autoadjustable parameter
+/* =======HETTRICK  22 MARCH 2016==========
+   
+   So, in summary, I (personally) would be happy as a clam with the 
+   following (minimized) number of inputs:
+  
+   Gy, VY01, VY02, VY03, Gx, VX10, VX20, VX30,
+   VY10, VY20, VY30, VY11, VY12, VY21
 
-    static final int OTIRINDEX = 91;
-    static final int OODIAOBS  = 92; // observed from trace
-    static final int OIDIAM    = 93; // used by parser only
-    static final int OIDIAX    = 94; // used by clients
-    static final int OIDIAY    = 95; // used by clients
-    static final int OODIAM    = 96; // used by parser only
-    static final int OODIAX    = 97; // used by clients
-    static final int OODIAY    = 98; // used by clients
-    static final int OZMIN     = 99;
-    static final int OZMAX     = 100;
-    static final int OFFOX     = 101; // offset from vertex
-    static final int OFFOY     = 102; // offset from vertex
-    static final int OFFIX     = 103; // offset from vertex
-    static final int OFFIY     = 104; // offset from vertex
-    static final int OSCATTER  = 105; // introduced Aug 2011 A128
-    static final int ONSPIDER  = 106; // number of spider legs
-    static final int OWSPIDER  = 107; // width of spider leg
-    static final int ONARRAYX  = 108;
-    static final int ONARRAYY  = 109; 
+   Then BEAM4 internally uses the following formula to determine the 
+   corresponding 6 constants needed for computing dN/dx:
 
-    static final int OE11      = 111; // Eulers computed by OEJIF parser
-    static final int OE12      = 112; // These convert lab to local.
-    static final int OE13      = 113; // For local to lab, use transpose. 
-    static final int OE21      = 114;
-    static final int OE22      = 115;
-    static final int OE23      = 116;
-    static final int OE31      = 117;
-    static final int OE32      = 118;
-    static final int OE33      = 119;
-    static final int OTYPE     = 120; // 0=lens, 1=mirror, 2=iris...
-    static final int OFORM     = 121; // 0=ellip, 1=rect...
-    static final int OPROFILE  = 122; // 0=plane, 1=conic...
-    static final int ONPARMS   = 123; // array size.
+   VX(i,j) = [(i+1)/j] * VY(i+1,j-1)  for  all  j .ne. 0
+
+   resulting in the following:
+
+   VX01 = VY10
+   VX02 = 1/2 VY11
+   VX03 = 1/3 VY12
+   VX11 = 2 VY20
+   VX12 = VY21
+   VX21 = 3 VY30    
+   
+   ==== added 4-5 June 2016: fourth power ====
+    Know what?
+    Numbers are cheap.
+    I'll stick in the whole group going to power-sum = 4:
+    VX40, VY40, VY04, VY13, VY22, VY31 user specifiable via .OPT
+    plus internally calculated  VX13, VX22, VX31, VX04.
+*/    
+
+    static final int OORDER    = 34;  // any of this group triggers OGROOVY; see OEJIF.
+    static final int OGX       = 35;  // explicit; user synonyms "GX" or "VX00"
+    static final int OGY       = 36;  // explicit; user synonyms "GY" or "VY00"
+
+    static final int OVX01     = 37;  // implicit; see RT13::setEulers().
+    static final int OVX02     = 38;  // implicit
+    static final int OVX03     = 39;  // implicit
+    static final int OVX04     = 40;  // implicit
+    static final int OVX10     = 41;  // "VX10"; straight groove
+    static final int OVX11     = 42;  // implicit
+    static final int OVX12     = 43;  // implicit
+    static final int OVX13     = 44;  // implicit
+    static final int OVX20     = 45;  // "VX20"; straight groove
+    static final int OVX21     = 46;  // implicit
+    static final int OVX22     = 47;  // implicit
+    static final int OVX30     = 48;  // "VX30"; straight groove
+    static final int OVX31     = 49;  // implicit
+    static final int OVX40     = 50;  // "VX40"; straight groove
+    
+    static final int OVY01     = 51;  // "VY01"; straight groove
+    static final int OVY02     = 52;  // "VY02"; straight groove
+    static final int OVY03     = 53;  // "VY03"; straight groove
+    static final int OVY04     = 54;  // "VY04"; straight groove
+    static final int OVY10     = 55;  // "VY10"
+    static final int OVY11     = 56;  // "VY11"
+    static final int OVY12     = 57;  // "VY12"
+    static final int OVY13     = 58;  // "VY13"
+    static final int OVY20     = 59;  // "VY20"
+    static final int OVY21     = 60;  // "VY21"
+    static final int OVY22     = 61;  // "VY22"
+    static final int OVY30     = 62;  // "VY30"
+    static final int OVY31     = 63;  // "VY31"
+    static final int OVY40     = 64;  // "VY40"
+    
+    static final int ORGAUSS   = 65;  // rms radius of circular Gaussian
+    static final int OHGAUSS   = 66;  // peak height of circular Gaussian
+    
+    static final int OHOEX1    = 71;
+    static final int OHOEY1    = 72;
+    static final int OHOEZ1    = 73;
+    static final int OHOEX2    = 74;
+    static final int OHOEY2    = 75;
+    static final int OHOEZ2    = 76;
+    static final int OHOELAM   = 77;
+    static final int OGROOVY   = 78; // OGX to OHOELAM nonzero set this groovy flag.
+    
+    static final int OZ00      = 80; // Zernike coefficient 0: piston
+    static final int OZ01      = 81;
+    static final int OZ02      = 82; 
+    static final int OZ03      = 83; 
+    static final int OZ04      = 84; 
+    static final int OZ05      = 85; 
+    static final int OZ06      = 86; 
+    static final int OZ07      = 87; 
+    static final int OZ08      = 88; 
+    static final int OZ09      = 89; 
+    static final int OZ10      = 90; 
+    static final int OZ11      = 91; 
+    static final int OZ12      = 92; 
+    static final int OZ13      = 93; 
+    static final int OZ14      = 94; 
+    static final int OZ15      = 95; 
+    static final int OZ16      = 96; 
+    static final int OZ17      = 97; 
+    static final int OZ18      = 98; 
+    static final int OZ19      = 99; 
+    static final int OZ20      = 100; 
+    static final int OZ21      = 101; 
+    static final int OZ22      = 102; 
+    static final int OZ23      = 103; 
+    static final int OZ24      = 104; 
+    static final int OZ25      = 105; 
+    static final int OZ26      = 106; 
+    static final int OZ27      = 107; 
+    static final int OZ28      = 108; 
+    static final int OZ29      = 109; 
+    static final int OZ30      = 110; 
+    static final int OZ31      = 111; 
+    static final int OZ32      = 112; 
+    static final int OZ33      = 113; 
+    static final int OZ34      = 114; 
+    static final int OZ35      = 115; 
+    static final int OFOCAL    = 116; //focal length of thin lens
+    static final int OFINALADJ = 117; // final autoadjustable parameter
+
+    static final int OTIRINDEX = 121;
+    static final int OODIAOBS  = 122; // observed from trace
+    static final int OIDIAM    = 123; // used by parser only
+    static final int OIDIAX    = 124; // used by clients
+    static final int OIDIAY    = 125; // used by clients
+    static final int OODIAM    = 126; // used by parser only
+    static final int OODIAX    = 127; // used by clients
+    static final int OODIAY    = 128; // used by clients
+    static final int OZMIN     = 129;
+    static final int OZMAX     = 130;
+    static final int OFFOX     = 131; // offset from vertex
+    static final int OFFOY     = 132; // offset from vertex
+    static final int OFFIX     = 133; // offset from vertex
+    static final int OFFIY     = 134; // offset from vertex
+    static final int OSCATTER  = 135; // scatter angle field degrees, Aug 2011 A128;  also A195.  
+    static final int ONSPIDER  = 137; // number of spider legs
+    static final int OWSPIDER  = 138; // width of spider leg
+    static final int ONARRAYX  = 139;
+    static final int ONARRAYY  = 140; 
+
+    static final int OE11      = 141; // Eulers computed by OEJIF parser
+    static final int OE12      = 142; // These convert lab to local.
+    static final int OE13      = 143; // For local to lab, use transpose. 
+    static final int OE21      = 144;
+    static final int OE22      = 145;
+    static final int OE23      = 146;
+    static final int OE31      = 147;
+    static final int OE32      = 148;
+    static final int OE33      = 149;
+    static final int OTYPE     = 150; // 0=lens, 1=mirror, 2=iris...
+    static final int OFORM     = 151; // 0=ellip, 1=rect...
+    static final int OPROFILE  = 152; // 0=plane, 1=conic...
+    static final int ONPARMS   = 153; // array size.
 
 /*-------------OTABLE strings for OEJIF diagnostic-----------*/
 
@@ -452,15 +586,21 @@ interface B4constants
     static final int OTLENSARRAY = 5; 
     static final int OTMIRRARRAY = 6; 
     static final int OTIRISARRAY = 7; 
-    static final int OTSCATTER   = 8; 
-    static final int OTCBIN      = 9;  // coordinate break input
-    static final int OTCBOUT     = 10; // coordinate break output
-    static final int OTBLFRONT   = 11; // bimodal lens front
-    static final int OTBLBACK    = 12; // bimodal lens back
-    static final int OTTHIN      = 13; // perfect thin lens
-    static final int OTUNK       = 14; // unknown type; SNH.
+ // static final int OTSCATTER   = 8; 
+    static final int OTGSCATTER  = 8;  // A195  Gaussian scatter type
+    static final int OTUSCATTER  = 9;  // A195  Uniform scatter type
+    static final int OTCBIN      = 10; // coordinate break input
+    static final int OTCBOUT     = 11; // coordinate break output
+    static final int OTBMIRROR   = 12; // bimodal mirror
+    static final int OTBLFRONT   = 13; // bimodal lens front
+    static final int OTBLBACK    = 14; // bimodal lens back
+    static final int OTTERMINATE = 15; 
+    static final int OTTHIN      = 16; // perfect thin lens
+    static final int OTUNK       = 17; // unknown type; SNH.
 
     // phantom is merely an OTLENS with equal indices.
+    // transmission grating is merely a groovy lens
+    // reflection grating is merely a groovy mirror
 
     static final String sTypes[] = {
     "   lens",   // 0
@@ -471,13 +611,16 @@ interface B4constants
     "lensArr",   // 5  /// should be lens + OSOLVER=OSARRAY???
     "mirrArr",   // 6  /// nope, see RT13.dIntercept().
     "irisArr",   // 7  /// This is correct. 
-    "scatter",   // 8
-    "cbInput",   // 9
-    "cbOutput",  // 10
-    "bilens_f",  // 11  bimodal lens front surface
-    "bilens_r",  // 12  bimodal lens rear surface
-    "thin",      // 13  perfect thin lens
-    "unknown"};  // 11  SNH
+    "g scat ",   // 8
+    "u scat ",   // 9
+    "cbInput",   // 10
+    "cbOutput",  // 11
+    "bimirror",  // 12
+    "bilens_f",  // 13  bimodal lens front surface
+    "bilens_r",  // 14  bimodal lens rear surface
+    "terminate", // 15  bimodal terminator
+    "thin",      // 16  perfect thin lens
+    "unknown"};  // 17  SNH
 
 /*-----------OPROFILE attributes and strings------------------*/
 
@@ -497,7 +640,8 @@ interface B4constants
     static final int OSZERNTOR = 13; 
     static final int OSBICONIC = 14;
     static final int OSARRAY   = 15;
-    static final int OSNFLAGS  = 16;   
+    static final int OSGAUSS   = 16;
+    static final int OSNFLAGS  = 17;   
 
     static final String[] sProfiles = {
     "Plano",     // 0 
@@ -515,7 +659,8 @@ interface B4constants
     "ZernRev",   // 12
     "ZernTor",   // 13
     "Biconic",   // 14
-    "Array"};    // 15   
+    "Array",     // 15
+    "****Gauss****"};    // 16 
 
 
 
@@ -535,7 +680,7 @@ interface B4constants
     static final int RSWAVEL        =     7; // raystarts[][] only
     static final int RSCOLOR        =     8; // raystarts[][] only
     static final int RSORDER        =     9; // raystarts[][] only
-    static final int RNSTARTS       =    10; // dimension of raystart[].
+    static final int RNSTARTS       =    10; // raystart[] attributes.
 
 /*-------------- ray output index local attribute macrodefs--------------*/
 
@@ -661,30 +806,31 @@ interface B4constants
 
 
 //-------User Option Group Macros--------------
-
-   static final int UO_IO      = 0; 
-   static final int UO_LAYOUT  = 1; 
-   static final int UO_AUTO    = 2; 
-   static final int UO_PLOT2   = 3; 
-   static final int UO_MPLOT   = 4;
-   static final int UO_MAP     = 5; 
-   static final int UO_PLOT3   = 6; 
-   static final int UO_1D      = 7; 
-   static final int UO_2D      = 8; 
-   static final int UO_RAND    = 9; 
-   static final int UO_CAD     = 10; 
-   static final int UO_START   = 11; 
-   static final int UO_EDIT    = 12;
-   static final int UO_GRAPH   = 13;
-   static final int UO_DEF     = 14; 
-   static final int UO_1DRAY   = 15; 
-   static final int UO_2DRRAY  = 16; 
-   static final int UO_2DCRAY  = 17; 
-   static final int UO_2DCGAUS = 18; 
-   static final int UO_RECENTO = 19; 
-   static final int UO_RECENTR = 20; 
-   static final int UO_RECENTM = 21; 
-   static final int NUOGROUPS  = 22; 
+   
+   static final int UO_NEWFILE = 0;  // skeleton options
+   static final int UO_IO      = 1; 
+   static final int UO_LAYOUT  = 2; 
+   static final int UO_AUTO    = 3;
+   static final int UO_PLOT2   = 4; 
+   static final int UO_MPLOT   = 5;
+   static final int UO_MAP     = 6; 
+   static final int UO_PLOT3   = 7; 
+   static final int UO_1D      = 8; 
+   static final int UO_2D      = 9; 
+   static final int UO_RAND    = 10; 
+   static final int UO_CAD     = 11; 
+   static final int UO_START   = 12; 
+   static final int UO_EDIT    = 13;
+   static final int UO_GRAPH   = 14;
+   static final int UO_DEF     = 15; 
+   static final int UO_1DRAY   = 16; 
+   static final int UO_2DRRAY  = 17; 
+   static final int UO_2DCRAY  = 18; 
+   static final int UO_2DCGAUS = 19; 
+   static final int UO_RECENTO = 20; 
+   static final int UO_RECENTR = 21; 
+   static final int UO_RECENTM = 22; 
+   static final int NUOGROUPS  = 23; 
 
 //--------UO strings: avoid "|" used in parsing-----------
 //----UO strings is a ragged right array, 
@@ -692,7 +838,13 @@ interface B4constants
 
    static final String UO[][][] = 
    {
-       {  // group 0 = UO_IO
+       {  // group 0 = UO_NEWFILE
+          {"Nrecords",             "15"},   // 0; nrows = Nrecords + 3
+          {"Nfields",              "10"},   // 1
+          {"FieldWidth",           "18"}    // 2
+       },
+         
+       {  // group 1 = UO_IO
           {"Show RMS when goals exist", "T"}
        },
 
@@ -735,7 +887,9 @@ interface B4constants
           {"Sticky uyspan",           "0"},  // 35
           {"Sticky uzspan",           "0"},  // 36
           {"Refractor connectors?",   "F"},  // 37
-          {"Retro visible?",          "T"}   // 38
+          {"Retro visible?",          "T"},  // 38
+          {"Dotted extension %",      "4"}   // 39
+          
        },
 
        {  // group 2 = UO_AUTO
@@ -760,10 +914,10 @@ interface B4constants
           {"Plus",                            "F"},  // 6
           {"Square",                          "F"},  // 7
           {"Diamond",                         "F"},  // 8
-          {"Good rays",                       "T"},  // 9   plot good rays
-          {"All rays",                        "F"},  // 10  plot all rays
-          {"Additional surface, none if zero", ""},  // 11
-          {"Black Background",                "F"}   // 12
+          {"Complete rays",                   "T"},  // 9  RROK
+          {"Sufficient rays",                 "F"},  // 10 enough surfs
+          // {"Additional surface, none if zero", ""},  // elim A207
+          {"Black Background",                "F"}   // 11
        },
 
        {  // group 4 = UO_MPLOT  MultiPlot options
@@ -846,8 +1000,8 @@ interface B4constants
           {"Plus",           "F"},   // 10
           {"Sqr",            "F"},   // 11
           {"Diam",           "F"},   // 12
-          {"Good rays",      "T"},   // 13
-          {"All rays",       "F"},   // 14
+          {"Complete rays",  "T"},   // 13
+          {"Sufficient rays","F"},   // 14
           {"White",          "T"},   // 15
           {"Black",          "F"},   // 16
           {"Stereo",         "F"},   // 17
@@ -1077,7 +1231,6 @@ interface B4constants
           {"RM8", ""},
           {"RM9", ""}
        }   
-    };
-
-} //--------end of Constants.java---------------------
+    };    
+} //--------end of B4onstants.java---------------------
 
