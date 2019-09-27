@@ -517,7 +517,7 @@ interface B4constants
     static final int OZ33      = 113; 
     static final int OZ34      = 114; 
     static final int OZ35      = 115; 
-    static final int OFOCAL    = 116; //focal length of thin lens
+    static final int ODIOP    = 116; //focal length of thin lens
     static final int OFINALADJ = 117; // final autoadjustable parameter
 
     static final int OTIRINDEX = 121;

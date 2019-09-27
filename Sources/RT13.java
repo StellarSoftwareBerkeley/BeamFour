@@ -1903,7 +1903,10 @@ class RT13 implements B4constants
     // Jaime García @gvJaime 2019
     // Ray tracing according to thin lens hypothesis.
     {
-      double focal = 1 / surf[OFOCAL];
+      double focal = surf[ODIOP];
+      if (focal == 0) return RROK; // if the value is unparsed, or is 0, leave rays unbent.
+      // Invert focal for calculations.
+      focal = 1 / focal;
       int sign = (int) Math.signum(focal);
       double[] r = new double[3];
       double d;

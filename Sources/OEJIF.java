@@ -790,6 +790,8 @@ class OEJIF extends EJIF
                       return OODIAX;
                     if (s.contains("Y"))
                       return OODIAY;
+                    if (s.contains("P"))
+                      return ODIOP;
                     return OODIAM;
                     
           case 'd': if (s.contains("X"))
@@ -799,11 +801,7 @@ class OEJIF extends EJIF
                     return OIDIAM;       
           
           case 'F':
-          case 'f': switch(c2up)
-                    {
-                      case 'C': return OFOCAL; // focal length for thin perfect lenses
-                      default: return OFORM;  // "form" = nonnumerical
-                    }
+          case 'f': return OFORM;  // "form" = nonnumerical
 
           case 'G':
           case 'g': switch(c1up)   // Group or Grating groove density
