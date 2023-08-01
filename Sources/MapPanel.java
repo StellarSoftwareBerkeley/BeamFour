@@ -8,7 +8,8 @@ import java.awt.event.*;   // Events
 
 @SuppressWarnings("serial")
 
-/** March 2015: adopted explicit QBASE for artwork quads. 
+/** Dec 2018 A207 eliminating groups (yay!)
+  * March 2015: adopted explicit QBASE for artwork quads. 
   * March 2015: improved output text file, including .CSV format.
   * 2012: Scales added for HorVar and VertVar
   * 2011: With this plan every options starts a fresh new run.
@@ -178,7 +179,6 @@ public class MapPanel extends GPanel // implements Runnable
     // Do not request repaint() here: this is a provider not a requestor. 
     {
         nsurfs = DMF.giFlags[ONSURFS]; 
-        ngroups = DMF.giFlags[ONGROUPS];
         nrays = DMF.giFlags[RNRAYS];  
         
         if (bPleaseParseUO)
@@ -241,7 +241,6 @@ public class MapPanel extends GPanel // implements Runnable
     // First line of defense! must never crash. 
     {
         nsurfs = DMF.giFlags[ONSURFS]; 
-        ngroups = DMF.giFlags[ONGROUPS]; 
         nrays = DMF.giFlags[RNRAYS]; 
         if (nsurfs<1) 
           return "No surfaces are defined"; 
@@ -290,10 +289,10 @@ public class MapPanel extends GPanel // implements Runnable
 
         //----test the map parameters for validity----
         
-        boolean ok = parseOneStepVar(sHvar, asH, ngroups); 
+        boolean ok = parseOneStepVar(sHvar, asH, nsurfs); 
         if (!ok)
           return "Hvar unknown"; 
-        ok = parseOneStepVar(sVvar, asV, ngroups); 
+        ok = parseOneStepVar(sVvar, asV, nsurfs); 
         if (!ok)
           return "Vvar unknown"; 
         
@@ -308,13 +307,13 @@ public class MapPanel extends GPanel // implements Runnable
         
         if (sHpar.length() > 0)
         {
-            ok = parseOneStepVar(sHpar, asHp, ngroups); 
+            ok = parseOneStepVar(sHpar, asHp, nsurfs); 
             if (!ok)
               return "Hparallax is unknown";
         }
         if (sVpar.length() > 0)
         {
-            ok = parseOneStepVar(sVpar, asVp, ngroups); 
+            ok = parseOneStepVar(sVpar, asVp, nsurfs); 
             if (!ok)
               return "Vparallax is unknown"; 
         }
@@ -435,7 +434,7 @@ public class MapPanel extends GPanel // implements Runnable
     {
         if (jsurf > nsurfs)
           return -0.0; 
-        return RT13.dGetSurf(iatt, jsurf); 
+        return RT13.dGetSurfParm(iatt, jsurf); 
     }
 
 
@@ -510,9 +509,9 @@ public class MapPanel extends GPanel // implements Runnable
         //---trace the rays and gather the datum for this box--------
         //---Note: REJIF line 88 sets each ray WFE group index=0
         //---prior to running a trace for WFE evaluation. 
-            
-        for (int kray=0; kray<=nrays; kray++)
-          RT13.iWFEgroup[kray] = 0;   // all rays are in WFEgroup zero
+        // A207 eliminated WFEs    
+        // for (int kray=0; kray<=nrays; kray++)
+        //   RT13.iWFEgroup[kray] = 0;   // all rays are in WFEgroup zero
         
         double d = -0.0; 
         int ngood = RT13.iBuildRays(true);  // builds all rays
@@ -638,8 +637,8 @@ public class MapPanel extends GPanel // implements Runnable
         // RFINAL in B4Constants = 10000; placeholder for 100*nsurfs term.
         int opxf  = RFINAL + RTXL;  // opcode for xfinal
         int opyf  = RFINAL + RTYL;  // opcode for yfinal
-        int xsurf = RT13.getGroupNum(opxf); // handles "final" surface 
-        int ysurf = RT13.getGroupNum(opyf); // handles "final" surface
+        int xsurf = RT13.getSurfNum(opxf); // handles "final" surface 
+        int ysurf = RT13.getSurfNum(opyf); // handles "final" surface
         if ((xsurf < 1) || (ysurf < 1))
           return BADCELL; 
         int n = 0; 

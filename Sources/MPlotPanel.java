@@ -6,7 +6,7 @@ import java.util.*;        // ArrayList
 @SuppressWarnings("serial")
 
 /** MultiPlot Artwork Generator
-  *
+  * A207: eliminating groups
   * A173: Adopting five GPanel quadLists and GPanel helper methods.
   *
   * A150: uses new Options dialog with explicit lists of variable values;
@@ -158,7 +158,6 @@ public class MPlotPanel extends GPanel
     // for annotation, host's bitmap is blitted instead.
     {    
         nsurfs    = DMF.giFlags[ONSURFS];    // input stuff
-        ngroups   = DMF.giFlags[ONGROUPS]; 
         nrays     = DMF.giFlags[RNRAYS]; 
         kcolor    = new int[MAXMP][MAXMP][MAXRAYS];  
         steps     = new double[MAXMP][MAXMP][2]; 
@@ -266,7 +265,6 @@ public class MPlotPanel extends GPanel
     //
     {
         nsurfs = DMF.giFlags[ONSURFS];  
-        ngroups = DMF.giFlags[ONGROUPS]; 
         nrays = DMF.giFlags[RNRAYS]; 
 
         for (int ix=0; ix<MAXMP; ix++)
@@ -615,7 +613,6 @@ public class MPlotPanel extends GPanel
     // Warning: this routine sets RT13.gwave to commandeer wavelengths.
     // When done be sure to reset RT13.gwave=0 to restore kray control. 
     {
-        ngroups = DMF.giFlags[ONGROUPS]; 
         nrays = DMF.giFlags[RNRAYS]; 
         
         setTempParms(ix, iy);

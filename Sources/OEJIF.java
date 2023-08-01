@@ -12,6 +12,7 @@ import javax.swing.text.*;  // BadLocationException
   *  The function of parse() is to set values into DMF.giFlags[] and RT13.surfs[][]. 
   *
   *  It implements Constants via EJIF. 
+  *  The ACTUAL PARSING WORK is done by getOptFieldAttrib(String s), bottom of this file.
   *
   *  parse() has no dirty bit worksavers; it always parses. 
   *
@@ -48,7 +49,6 @@ class OEJIF extends EJIF
         DMF.giFlags[OPRESENT] = status[GPRESENT]; 
         DMF.giFlags[ONLINES]  = status[GNLINES]; 
         DMF.giFlags[ONSURFS]  = nsurfs = status[GNRECORDS]; 
-        DMF.giFlags[ONGROUPS] = nsurfs; 
         DMF.giFlags[ONFIELDS] = nfields = status[GNFIELDS]; 
         if (nsurfs < 1)
           return; 
@@ -64,9 +64,6 @@ class OEJIF extends EJIF
               RT13.surfs[j][ia] = -0.0; // minus zero means blank entry.
               
             RT13.surfs[j][OREFRACT] = 1.0; 
-            RT13.jstart[j] = j;  // groups
-            RT13.jstop[j]  = j;  // groups
-            RT13.group[j]  = j;  // groups
         }
  
         for (int f=0; f<MAXFIELDS; f++)
@@ -110,9 +107,6 @@ class OEJIF extends EJIF
         for (int jsurf=1; jsurf<=nsurfs; jsurf++)
         {
             RT13.surfs[jsurf][OTYPE] = OTLENS;  // default
-            RT13.jstart[jsurf] = jsurf;         // default
-            RT13.jstop[jsurf]  = jsurf;         // default
-            RT13.group[jsurf]  = jsurf;         // default
         }
           
         //-----first parse the optics type column---------
@@ -127,15 +121,36 @@ class OEJIF extends EJIF
               char c4 = U.getCharAt(s.toUpperCase(), 4); 
               switch(c0)
               {
-                 case 'b': // bimodal lens front="bif" else back "bix".
-                 case 'B': RT13.surfs[jsurf][OTYPE]
-                            = (c2=='F') ? OTBLFRONT : OTBLBACK; break; 
-                            
+                 case 'b': // bimodal lens front="bif" "bir" "bib" "bim"
+                 case 'B': if (c2 == 'F')
+                               RT13.surfs[jsurf][OTYPE]  = OTBLFRONT;
+                            if ((c2 == 'R') || (c2 == 'B'))
+                               RT13.surfs[jsurf][OTYPE] = OTBLBACK;
+                            if (c2 == 'M')
+                               RT13.surfs[jsurf][OTYPE] = OTBMIRROR;
+                            if (c2 == 'T')
+                               RT13.surfs[jsurf][OTYPE] = OTTERMINATE;    
+                            break; 
+
+                 case 'c':     // coordinate breaks
+                 case 'C': if (c2 == 'I')
+                           {
+                               RT13.surfs[jsurf][OTYPE] = OTCBIN; 
+                               break;
+                           }
+                           if (c2 == 'O')
+                           {
+                               RT13.surfs[jsurf][OTYPE] = OTCBOUT; 
+                               break; 
+                           }
+                           break;
+                           
                  case 'i': // iris
                  case 'I': RT13.surfs[jsurf][OTYPE] 
                              = (c4=='A') ? OTIRISARRAY : OTIRIS; break; 
 
-                 case 'G': RT13.surfs[jsurf][OTYPE] = OTMIRROR; break;
+                 case 'G': RT13.surfs[jsurf][OTYPE] 
+                             = (c2=='C') ? OTGSCATTER : OTMIRROR; break;  // A195
 
                  case 'l':
                  case 'L': RT13.surfs[jsurf][OTYPE] 
@@ -153,25 +168,28 @@ class OEJIF extends EJIF
                  // case 's':  // spider: replaced by iris with legs. 
 
                  case 's':
-                 case 'S':  RT13.surfs[jsurf][OTYPE] = OTSCATTER; break; 
+                 case 'S':  RT13.surfs[jsurf][OTYPE] = OTGSCATTER; break;  // A195 Gaussian scatter
+                 
+                 case 't':
+                 case 'T': if (c2 == 'I')
+                           {
+                               RT13.surfs[jsurf][OTYPE] = OTTHIN;
+                               break;
+                           }
+                           if (c2 == 'R')  // Term is alternate to BiTerm
+                           {
+                               RT13.surfs[jsurf][OTYPE] = OTTERMINATE;
+                               break;
+                           }
+                           break;
+                 case 'u':
+                 case 'U':  RT13.surfs[jsurf][OTYPE] = OTUSCATTER; break;  // A195 uniform scatter
  
                  case 'd':     // optical path distorters
                  case 'D':
                  case 'w':
                  case 'W': RT13.surfs[jsurf][OTYPE] = OTDISTORT; break; 
-             
-                 case 'c':     // coordinate breaks
-                 case 'C': if (c2 == 'I')
-                           {
-                               RT13.surfs[jsurf][OTYPE] = OTCBIN; 
-                               break;
-                           }
-                           if (c2 == 'O')
-                           {
-                               RT13.surfs[jsurf][OTYPE] = OTCBOUT; 
-                               break; 
-                           }
-                           break;
+
                  default: RT13.surfs[jsurf][OTYPE] = OTLENS; break; 
                }
                typetag[jsurf] = getTag(ifield, 2+jsurf); 
@@ -201,38 +219,6 @@ class OEJIF extends EJIF
           } 
           
           
-        //-----parse the groups if group column is present-----
-        
-        ifield = oI2F[OGROUP];  
-        char cGroup[] = new char[MAXSURFS+1]; 
-        for (int j=1; j<=MAXSURFS; j++)
-          cGroup[j] = ' ';
-        if (ifield > ABSENT)   // groups column present?
-        {
-            for (int j=1; j<=nsurfs; j++)
-              cGroup[j] = U.getCharAt(getFieldTrim(ifield, 2+j), 0); 
-            RT13.group[1]  = 1; 
-            RT13.jstart[1] = 1;
-            RT13.jstop[1]  = 1; 
-
-            for ( int j=1; j<=MAXSURFS; j++)
-            {
-                boolean bNew = (cGroup[j] == ' ') 
-                            || (cGroup[j-1] == ' ')
-                            || (cGroup[j] != cGroup[j-1]); 
-                int g = bNew ? RT13.group[j-1]+1 : RT13.group[j-1];           
-                RT13.group[j]  = g; 
-                if (bNew)         
-                  RT13.jstart[g] = j;
-                RT13.jstop[g]  = j;    
-            }
-            for (int j=nsurfs+1; j<=MAXSURFS; j++)
-               RT13.group[j] = RT13.group[nsurfs]; 
-
-            DMF.giFlags[ONGROUPS] = RT13.group[nsurfs]; 
-        }
-              
-      
         //----------refraction: sometimes numerical data--------------
         //---if refraction LUT is needed, OREFRACT will be NaN.----
 
@@ -266,6 +252,7 @@ class OEJIF extends EJIF
             for (int f=0; f<nfields; f++)
             {
                 int ia = oF2I[f];   // attribute of this surface
+
                 if (ia == OTYPE)    // types were analyzed above...
                   continue; 
                 if (ia == OFORM)    // forms were analyzed above...
@@ -387,8 +374,8 @@ class OEJIF extends EJIF
         for (int j=1; j<=nsurfs; j++)
         {
             boolean bGroovy = false; 
-            for (int kg=OGX; kg<=OHOELAM; kg++)
-              if (Math.abs(RT13.surfs[j][kg])>0.0)
+            for (int kg=OORDER; kg<OGROOVY; kg++)
+              if (RT13.surfs[j][kg] != 0.0)
                 bGroovy = true;
             RT13.surfs[j][OGROOVY] = bGroovy ? 1.0 : 0.0; 
         }
@@ -516,7 +503,11 @@ class OEJIF extends EJIF
 
             if (bZern)
               iProfile = (iProfile==OSTORIC) ? OSZERNTOR : OSZERNREV;
-
+              
+            if (RT13.surfs[j][ORGAUSS] > 0.)  // found a Gaussian surface profile
+            {
+                iProfile = OSGAUSS; 
+            }
             //---------apply hints to conic or cyl, not higher----------
 
             switch (iProfile)
@@ -534,6 +525,8 @@ class OEJIF extends EJIF
                   if ('>' == typetag[j])  iProfile = OSYCYLGT;
                   break; 
             }
+            // System.out.println("OEJIF parse() surface= "+j+" finds iProfile= "+iProfile+"  "+sProfiles[iProfile]); 
+            
             RT13.surfs[j][OPROFILE] = iProfile; 
         }
 
@@ -542,14 +535,12 @@ class OEJIF extends EJIF
         dOsize = 0.0; 
         for (int j=1; j<=nsurfs; j++)
         {
-           dOsize += Math.abs(RT13.surfs[j][OX]); 
-           dOsize += Math.abs(RT13.surfs[j][OY]); 
-           dOsize += Math.abs(RT13.surfs[j][OZ]); 
-           dOsize += Math.abs(RT13.surfs[j][OODIAM]); 
-           dOsize += Math.abs(RT13.surfs[j][OODIAX]); 
+           dOsize = Math.max(dOsize, Math.abs(RT13.surfs[j][OX])); 
+           dOsize = Math.max(dOsize, Math.abs(RT13.surfs[j][OY])); 
+           dOsize = Math.max(dOsize, Math.abs(RT13.surfs[j][OZ])); 
+           dOsize = Math.max(dOsize, Math.abs(RT13.surfs[j][OODIAM])); 
+           dOsize = Math.max(dOsize, Math.abs(RT13.surfs[j][OODIAX])); 
         }
-        if (nsurfs > 1)
-          dOsize /= nsurfs; 
         if (dOsize < TOL)
           dOsize = 1.0;
           
@@ -732,13 +723,19 @@ class OEJIF extends EJIF
     // Table data should be numerical, except ABSENT, OFORM, OTYPE, OREFRACT. 
     // Radius of curvature is written "RxCxxxx" i.e. c2up='C'.
     {
-        char c0=' ', c1up=' ', c2up=' ', c3up=' ', c4up=' ';
+        // System.out.println("OEJIF method getOptFieldAttrib() is given arg = "+s); 
+        char c0=' ', c0up=' ', c1up=' ', c2up=' ', c3up=' ', c4up=' ';
+        String svls = ""; 
+        
         s = s.trim(); 
         int len = s.length(); 
         if (len < 1)
           return ABSENT;
-        c0 = s.charAt(0); 
-        s = s.toUpperCase(); 
+        c0 = s.charAt(0);                  // save case of c0
+        c0up = Character.toUpperCase(c0); 
+        if ((len == 4) && (c0up == 'V'))
+          svls = s.toUpperCase(); 
+        s = s.toUpperCase();               // ignore case beyond c0
         if (len > 1)
           c1up = s.charAt(1); 
         if (len > 2)
@@ -776,9 +773,9 @@ class OEJIF extends EJIF
                        case '9': return OA9;
                        case 'C': return OTYPE; // "ACTION"
                     }
-                    if (s.contains("X"))
+                    if (s.endsWith("X"))
                       return OASPHX;
-                    if (s.contains("Y"))
+                    if (s.endsWith("Y") && (len < 9)) // allows 'asphericity'
                       return OASPHY;
                     return OASPHER;
 
@@ -793,6 +790,8 @@ class OEJIF extends EJIF
                       return OODIAX;
                     if (s.contains("Y"))
                       return OODIAY;
+                    if (s.contains("P"))
+                      return ODIOP;
                     return OODIAM;
                     
           case 'd': if (s.contains("X"))
@@ -810,17 +809,20 @@ class OEJIF extends EJIF
                        case 'R': return OGROUP;
                        case 'X': return OGX;
                        case 'Y': return OGY;
-                       case '1': return OVLS1;
-                       case '2': return OVLS2;
-                       case '3': return OVLS3;
-                       case '4': return OVLS4;
+                       // case '1': return OVLS1;    // removed 22 March 2016 A192
+                       // case '2': return OVLS2;
+                       // case '3': return OVLS3;
+                       // case '4': return OVLS4;
                     }
                     return ABSENT;
 
           case 'H':
-          case 'h': if (len < 4)     // HOE entries
-                  return ABSENT;
-                switch(c3up)
+          case 'h': if (len < 4)    
+                return ABSENT;
+                if (c1up=='G') 
+                   return OHGAUSS;  // height of 2D Gaussian
+                  
+                switch(c3up)         // HOE entries
                 {
                     case 'L':
                     case 'l': return OHOELAM;
@@ -873,29 +875,85 @@ class OEJIF extends EJIF
           case 'p':  return OPITCH;
 
           case 'R':
-          case 'r':  if ((c2up=='C') && (c3up=='X')) return ORADX;
+          case 'r':  if (c1up=='G') return ORGAUSS;   // 2D Gaussian radius or sigma          
+                     if ((c2up=='C') && (c3up=='X')) return ORADX;
                      if ((c2up=='C') && (c3up=='Y')) return ORADY;
                      if (c2up=='C') return ORAD;  
                      return OROLL;
 
           case 'S':
-          case 's':  if (c1up=='C')  return OSCATTER; 
+          case 's':  if (c1up=='C')  return OSCATTER;  // angle, degrees 
                      return OSHAPE; 
 
           case 'T':
           case 't':  if (c1up == 'Y')  return OTYPE; 
                      return OTILT;     // tilt. 
 
-          case 'V':
-          case 'v':  switch (c3up)
+          case 'V':   // twenty curl-free explicit VLS coefficients
+          case 'v':  
+                     if (svls.equals("VX00")) return OGX;    // synonym
+                     if (svls.equals("VX10")) return OVX10; 
+                     if (svls.equals("VX20")) return OVX20; 
+                     if (svls.equals("VX30")) return OVX30;
+                     if (svls.equals("VX40")) return OVX40; 
+                     if (svls.equals("VY00")) return OGY;    // synonym
+                     if (svls.equals("VY01")) return OVY01; 
+                     if (svls.equals("VY02")) return OVY02; 
+                     if (svls.equals("VY03")) return OVY03;
+                     if (svls.equals("VY04")) return OVY04; 
+                     if (svls.equals("VY10")) return OVY10;
+                     if (svls.equals("VY11")) return OVY11;
+                     if (svls.equals("VY12")) return OVY12;
+                     if (svls.equals("VY13")) return OVY13; 
+                     if (svls.equals("VY20")) return OVY20;
+                     if (svls.equals("VY21")) return OVY21;
+                     if (svls.equals("VY22")) return OVY22; 
+                     if (svls.equals("VY30")) return OVY30; 
+                     if (svls.equals("VY31")) return OVY31; 
+                     if (svls.equals("VY40")) return OVY40; 
+                     return ABSENT;
+          
+          
+                    /***************************************
+                    switch (c1up)
                      {
-                        case '1': return OVLS1;
-                        case '2': return OVLS2;
-                        case '3': return OVLS3;
-                        case '4': return OVLS4;
+                        case 'X': switch(c2up)
+                                  {
+                                     case '1': return OVLX10;
+                                     case '2': return OVLX20;
+                                     case '3': return OVLX30;
+                                     default: return ABSENT;
+                                  }                        
+                        case 'Y': switch (c2up)
+                                  {
+                                    case '0':  switch(c3up)
+                                               {
+                                                   case '1': return OVLY01; 
+                                                   case '2': return OVLY02;
+                                                   case '3': return OVLY03;
+                                                   default: return ABSENT;
+                                                }
+                                    case '1': switch(c3up)
+                                              {
+                                                  case '0': return OVLY10;
+                                                  case '1': return OVLY11; 
+                                                  case '2': return OVLY12; 
+                                                  default: return ABSENT;
+                                              } 
+                                     case '2': switch (c3up)
+                                               {
+                                                   case '0': return OVLY20;
+                                                   case '1': return OVLY21;
+                                                   default: return ABSENT;
+                                                }
+                                     case '3': if (c3up == '0') return OVLY30;
+                                  }
                      }
                      return ABSENT;
-
+                     ********************************/
+                     
+                     
+                     
           case 'W':
           case 'w':  if (c1up=='S')  
                        return OWSPIDER;
