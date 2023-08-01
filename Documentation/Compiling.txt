@@ -2,6 +2,10 @@
 
 ====COMPILING.TXT====
 
+On Linux, run the Makefile:
+    make
+or otherwise execute the following individual steps:
+
 1.  Get your compiler version:    
         javac -version
     and enter the version on line 19 of B4constants.java where it will become available
